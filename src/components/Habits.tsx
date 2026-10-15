@@ -1,0 +1,335 @@
+import { useMemo, useState } from 'react';
+import {
+  IconCheck, IconPin, IconPinnedOff, IconChevronDown, IconChevronUp, IconPencil, IconDice5, IconAnchor, IconBulb, IconHeart,
+  IconTrash, IconFlame, IconCoin, IconCalendarRepeat,
+} from '@tabler/icons-react';
+import type { Habit, HabitCategory, HabitTier } from '../types';
+import { liveHabits, useStore } from '../store';
+import {
+  ALL_HABITS_BONUS, CATEGORIES, TIERS, WEEKDAYS, doneOn, habitPoints, habitStreak, pinnedFor, scheduleLabel, scheduledOn,
+} from '../lib/habits';
+import { DynIcon, ICON_KEYS } from '../lib/icons';
+import { addDays, dayKey, plural, uid, weekdayShort } from '../lib/util';
+import { Modal } from './Modal';
+import { Bar, Check, Seg, colorVars } from './ui';
+
+const tierOf = (h: Habit): HabitTier => h.tier ?? 'easy';
+
+// Последние 7 дней: зелёный — сделано, серый — не сделано, бледный — не запланировано
+function WeekDots({ habit }: { habit: Habit }) {
+  const logs = useStore((s) => s.data.habitLogs);
+  const today = new Date();
+  const days = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6));
+  return (
+    <div className="row" style={{ gap: 4 }} aria-label="Последние 7 дней">
+      {days.map((d) => {
+        const on = doneOn(logs, habit.id, dayKey(d));
+        const planned = scheduledOn(habit, d);
+        return (
+          <span key={dayKey(d)} title={`${weekdayShort(d)}: ${on ? 'сделано' : planned ? 'не сделано' : 'не запланировано'}`}
+            style={{ width: 12, height: 12, borderRadius: 4, display: 'inline-block', background: on ? 'var(--success)' : 'var(--surface-3)', opacity: on || planned ? 1 : 0.35 }} />
+        );
+      })}
+    </div>
+  );
+}
+
+// Выбор дней недели для закреплённой привычки
+function DaysPicker({ days, onChange }: { days: number[] | undefined; onChange: (d: number[] | undefined) => void }) {
+  const set = new Set(days && days.length ? days : [0, 1, 2, 3, 4, 5, 6]);
+  const preset = (d: number[] | undefined) => onChange(d);
+  const toggle = (i: number) => {
+    const next = new Set(set);
+    if (next.has(i)) next.delete(i);
+    else next.add(i);
+    if (next.size === 0) return; // хотя бы один день
+    onChange(next.size === 7 ? undefined : [...next].sort());
+  };
+  const label = scheduleLabel({ days } as Habit);
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <div className="row wrap" style={{ gap: 6 }}>
+        <button type="button" className={`chip ${label === 'каждый день' ? 'on' : ''}`} style={colorVars('pink')} onClick={() => preset(undefined)}>Каждый день</button>
+        <button type="button" className={`chip ${label === 'по будням' ? 'on' : ''}`} style={colorVars('pink')} onClick={() => preset([0, 1, 2, 3, 4])}>По будням</button>
+        <button type="button" className={`chip ${label === 'по выходным' ? 'on' : ''}`} style={colorVars('pink')} onClick={() => preset([5, 6])}>По выходным</button>
+      </div>
+      <div className="row" style={{ gap: 4 }}>
+        {WEEKDAYS.map((w, i) => (
+          <button key={w} type="button" onClick={() => toggle(i)} aria-pressed={set.has(i)}
+            style={{
+              width: 38, height: 34, borderRadius: 10, cursor: 'pointer', fontWeight: 800, fontSize: 13,
+              border: `2px solid ${set.has(i) ? 'var(--accent)' : 'var(--border)'}`,
+              background: set.has(i) ? 'var(--accent-soft)' : 'var(--surface)', color: set.has(i) ? 'var(--accent-soft-text)' : 'var(--text-3)',
+            }}>
+            {w}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Диалог «Закрепить»: регулярность выполнения
+function PinDialog({ habit, onClose }: { habit: Habit; onClose: () => void }) {
+  const save = useStore((s) => s.saveHabit);
+  const [days, setDays] = useState<number[] | undefined>(habit.days);
+  return (
+    <Modal
+      title="Закрепить привычку"
+      onClose={onClose}
+      footer={
+        <>
+          {habit.mine ? (
+            <button className="btn danger" onClick={() => { save({ ...habit, mine: false }); onClose(); }}><IconPinnedOff size={16} /> Открепить</button>
+          ) : <span />}
+          <button className="btn primary" onClick={() => { save({ ...habit, mine: true, days }); onClose(); }}><IconPin size={16} /> {habit.mine ? 'Сохранить' : 'Закрепить'}</button>
+        </>
+      }
+    >
+      <div className="stack" style={{ gap: 14 }}>
+        <p style={{ fontWeight: 800 }}>{habit.title}</p>
+        <p className="small muted">
+          Закреплённая привычка каждый день появляется на экране «Сейчас» в списке «Привычки на сегодня». У неё считается своя серия:
+          пропуск в незапланированный день серию не прерывает. Если выполнить все закреплённые привычки дня — бонус +{ALL_HABITS_BONUS}.
+        </p>
+        <div className="field">
+          <span className="label-text">Когда выполнять</span>
+          <DaysPicker days={days} onChange={setDays} />
+        </div>
+        {habit.anchor && (
+          <p className="small row" style={{ alignItems: 'flex-start', gap: 6 }}>
+            <IconAnchor size={16} style={{ flexShrink: 0, color: 'var(--primary)' }} />
+            <span>Якорь: {habit.anchor.charAt(0).toLowerCase() + habit.anchor.slice(1)}. Привязка к ежедневному действию — лучшее напоминание.</span>
+          </p>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+export function HabitCard({ habit, compact }: { habit: Habit; compact?: boolean }) {
+  const logs = useStore((s) => s.data.habitLogs);
+  const toggle = useStore((s) => s.toggleHabit);
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [pinning, setPinning] = useState(false);
+  const done = doneOn(logs, habit.id, dayKey());
+  const streak = habitStreak(logs, habit);
+  const cat = CATEGORIES[habit.category] ?? CATEGORIES.care;
+  const tier = tierOf(habit);
+  const pts = habitPoints(habit);
+
+  return (
+    <div className="card" style={{ padding: '12px 14px', borderColor: done ? 'var(--success)' : tier === 'hard' ? 'var(--border-strong)' : undefined, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
+        <div className="task-icon tint strong" style={{ ...colorVars(cat.color), width: 40, height: 40 }}><DynIcon name={habit.icon} size={20} /></div>
+        <div className="grow">
+          <p style={{ fontWeight: 800, overflowWrap: 'anywhere' }}>{habit.title}</p>
+          <div className="row wrap" style={{ gap: 6, marginTop: 2 }}>
+            <span className="small faint">{habit.minutes} мин</span>
+            <span className="tag tint" style={colorVars(cat.color)}>{cat.label}</span>
+            {tier === 'hard' && <span className="tag" style={{ background: 'var(--gold)', color: 'var(--gold-text)' }}><IconFlame size={12} /> Посерьёзнее</span>}
+          </div>
+        </div>
+        <button
+          className={`btn icon ${habit.mine ? '' : 'ghost'}`} onClick={() => setPinning(true)}
+          aria-pressed={habit.mine} aria-label={habit.mine ? 'Настроить закрепление' : 'Закрепить привычку'}
+          title={habit.mine ? `Закреплена: ${scheduleLabel(habit)}` : 'Закрепить, чтобы выполнять регулярно'}
+          style={{ color: habit.mine ? 'var(--accent)' : 'var(--text-3)', borderColor: habit.mine ? 'var(--accent)' : undefined }}
+        >
+          <IconPin size={18} />
+        </button>
+      </div>
+
+      {habit.mine && !compact && (
+        <div className="row wrap" style={{ justifyContent: 'space-between', gap: 6 }}>
+          <span className="small row" style={{ gap: 4, color: 'var(--accent)', fontWeight: 700 }}><IconCalendarRepeat size={14} /> {scheduleLabel(habit)}</span>
+          <WeekDots habit={habit} />
+        </div>
+      )}
+      {streak > 1 && <span className="small" style={{ color: 'var(--accent)', fontWeight: 800 }}><IconFlame size={13} /> {streak} {plural(streak, 'раз', 'раза', 'раз')} подряд</span>}
+
+      {open && (
+        <div className="stack small" style={{ gap: 6, background: 'var(--surface-2)', borderRadius: 12, padding: '10px 12px' }}>
+          {habit.why && <p className="row" style={{ alignItems: 'flex-start', gap: 6 }}><IconHeart size={16} style={{ flexShrink: 0, color: 'var(--accent)' }} /><span><b>Зачем:</b> {habit.why}</span></p>}
+          {habit.tip && <p className="row" style={{ alignItems: 'flex-start', gap: 6 }}><IconBulb size={16} style={{ flexShrink: 0, color: 'var(--warning)' }} /><span><b>Как закрепить:</b> {habit.tip}</span></p>}
+          {habit.anchor && <p className="row" style={{ alignItems: 'flex-start', gap: 6 }}><IconAnchor size={16} style={{ flexShrink: 0, color: 'var(--primary)' }} /><span><b>Якорь:</b> {habit.anchor.charAt(0).toLowerCase() + habit.anchor.slice(1)} → {habit.title.charAt(0).toLowerCase() + habit.title.slice(1)}</span></p>}
+          <div><button className="btn sm ghost" onClick={() => setEditing(true)}><IconPencil size={14} /> Изменить</button></div>
+        </div>
+      )}
+
+      <div className="row wrap" style={{ justifyContent: 'space-between', marginTop: 'auto', gap: 6 }}>
+        <button className="btn sm ghost" style={{ paddingLeft: 6, paddingRight: 6 }} onClick={() => setOpen(!open)} aria-expanded={open}>
+          {open ? <IconChevronUp size={15} /> : <IconChevronDown size={15} />} {open ? 'Свернуть' : 'Зачем и как'}
+        </button>
+        <button className={`btn sm ${done ? '' : 'primary'}`} onClick={() => toggle(habit.id)} aria-pressed={done}
+          style={done ? { color: 'var(--success)', borderColor: 'var(--success)' } : undefined}>
+          <IconCheck size={15} /> {done ? 'Сделано' : `Сделал +${pts}`}
+        </button>
+      </div>
+      {editing && <HabitEditor habit={habit} onClose={() => setEditing(false)} />}
+      {pinning && <PinDialog habit={habit} onClose={() => setPinning(false)} />}
+    </div>
+  );
+}
+
+export const newHabit = (): Habit => ({
+  id: uid(), updatedAt: Date.now(), title: '', minutes: 5, category: 'care', tier: 'easy', icon: 'star', why: '', tip: '', anchor: '', mine: false,
+});
+
+export function HabitEditor({ habit, onClose }: { habit: Habit; onClose: () => void }) {
+  const save = useStore((s) => s.saveHabit);
+  const del = useStore((s) => s.deleteHabit);
+  const [h, setH] = useState<Habit>({ ...habit, tier: tierOf(habit) });
+  const [err, setErr] = useState('');
+  const exists = useStore.getState().data.habits.some((x) => x.id === habit.id);
+  const p = (patch: Partial<Habit>) => setH((x) => ({ ...x, ...patch }));
+
+  return (
+    <Modal
+      title={exists ? 'Дело' : 'Новое дело'}
+      onClose={onClose}
+      footer={
+        <>
+          {exists ? <button className="btn danger" onClick={() => { del(h.id); onClose(); }}><IconTrash size={16} /> Удалить</button> : <span />}
+          <button className="btn primary" onClick={() => {
+            if (!h.title.trim()) return setErr('Назовите дело');
+            save({ ...h, title: h.title.trim(), anchor: h.anchor.trim(), tip: h.tip.trim(), why: h.why.trim() });
+            onClose();
+          }}>Сохранить</button>
+        </>
+      }
+    >
+      <div className="stack" style={{ gap: 14 }}>
+        <div className="field">
+          <label htmlFor="h-title">Что сделать</label>
+          <input id="h-title" className="input" autoFocus value={h.title} placeholder="Покрасить одну миниатюру" onChange={(e) => { p({ title: e.target.value }); setErr(''); }} />
+          {err && <span className="small" style={{ color: 'var(--danger)' }}>{err}</span>}
+        </div>
+        <div className="row wrap" style={{ gap: 14, alignItems: 'flex-end' }}>
+          <div className="field" style={{ width: 110 }}>
+            <label htmlFor="h-min">Минут</label>
+            <input id="h-min" className="input" type="number" min={1} max={120} value={h.minutes} onChange={(e) => p({ minutes: Math.max(1, Math.min(120, Math.round(+e.target.value) || 1)) })} />
+          </div>
+          <div className="field">
+            <span className="label-text">Сложность</span>
+            <Seg<HabitTier> value={tierOf(h)} onChange={(v) => p({ tier: v })} options={(['easy', 'hard'] as HabitTier[]).map((k) => ({ v: k, label: TIERS[k].label }))} />
+          </div>
+          <span className="pill gold" style={{ fontSize: 13 }}><IconCoin size={14} /> +{habitPoints(h)} за выполнение</span>
+        </div>
+        <div className="field">
+          <span className="label-text">Категория</span>
+          <Seg<HabitCategory> value={h.category} onChange={(v) => p({ category: v })} options={(Object.keys(CATEGORIES) as HabitCategory[]).map((k) => ({ v: k, label: CATEGORIES[k].label }))} />
+        </div>
+        <div className="field">
+          <span className="label-text">Регулярность</span>
+          <label className="switch">
+            <input type="checkbox" checked={h.mine} onChange={(e) => p({ mine: e.target.checked })} />
+            <span className="track" />
+            <span>Закрепить — выполнять регулярно</span>
+          </label>
+          {h.mine && <div style={{ marginTop: 6 }}><DaysPicker days={h.days} onChange={(days) => p({ days })} /></div>}
+        </div>
+        <div className="field">
+          <label htmlFor="h-anchor">Якорь: после чего вы будете это делать</label>
+          <input id="h-anchor" className="input" value={h.anchor} placeholder="После того как налью утренний чай" onChange={(e) => p({ anchor: e.target.value })} />
+          <span className="small faint">Привяжите к тому, что вы и так делаете каждый день, — это лучшее напоминание.</span>
+        </div>
+        <div className="field">
+          <label htmlFor="h-why">Зачем</label>
+          <input id="h-why" className="input" value={h.why} onChange={(e) => p({ why: e.target.value })} />
+        </div>
+        <div className="field">
+          <label htmlFor="h-tip">Как закрепить</label>
+          <textarea id="h-tip" className="textarea" value={h.tip} onChange={(e) => p({ tip: e.target.value })} />
+        </div>
+        <div className="field">
+          <span className="label-text">Значок</span>
+          <div className="row wrap">
+            {ICON_KEYS.map((k) => (
+              <button key={k} type="button" className="btn icon" onClick={() => p({ icon: k })} aria-label={k}
+                style={{ borderColor: h.icon === k ? 'var(--accent)' : undefined, background: h.icon === k ? 'var(--accent-soft)' : undefined }}>
+                <DynIcon name={k} size={18} />
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// «Нет сил ни на что?» — несколько случайных простых дел; закреплённые и самые короткие — вероятнее
+export function HabitPicker({ count = 3 }: { count?: number }) {
+  const data = useStore((s) => s.data);
+  const [seed, setSeed] = useState(0);
+  const today = dayKey();
+  const habits = liveHabits(data).filter((x) => tierOf(x) === 'easy');
+  const picks = useMemo(() => {
+    const pool = habits.filter((x) => !doneOn(data.habitLogs, x.id, today));
+    const weighted = pool.map((x) => ({ x, w: Math.random() * (x.mine ? 2 : 1) * (x.minutes <= 3 ? 1.5 : 1) }));
+    return weighted.sort((a, b) => b.w - a.w).slice(0, count).map((a) => a.x.id);
+    // пересчитываем только по кнопке «Другие» и при смене дня, а не после каждой отметки
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed, today, habits.length]);
+  const doneToday = liveHabits(data).filter((x) => doneOn(data.habitLogs, x.id, today)).length;
+
+  return (
+    <div className="stack" style={{ gap: 10 }}>
+      <div className="row wrap" style={{ justifyContent: 'space-between' }}>
+        <p className="small muted" style={{ maxWidth: 520 }}>
+          Ничего не хочется — это нормально. Выберите одно дело на 1–10 минут: оно сохранит серию и часто помогает «завестись».
+          {doneToday > 0 && <b style={{ color: 'var(--success)' }}> Сегодня уже сделано: {doneToday}.</b>}
+        </p>
+        <button className="btn sm violet" onClick={() => setSeed(seed + 1)}><IconDice5 size={15} /> Другие</button>
+      </div>
+      <div className="grid-cards">
+        {picks.map((id) => {
+          const hb = habits.find((x) => x.id === id);
+          return hb ? <HabitCard key={id} habit={hb} compact /> : null;
+        })}
+      </div>
+      {picks.length === 0 && <p className="small muted">Все простые дела на сегодня сделаны. Вы молодец — можно отдыхать с чистой совестью.</p>}
+    </div>
+  );
+}
+
+// Компактный чек-лист закреплённых привычек на сегодня (для экрана «Сейчас»)
+export function PinnedToday({ onOpenAll }: { onOpenAll?: () => void }) {
+  const data = useStore((s) => s.data);
+  const toggle = useStore((s) => s.toggleHabit);
+  const today = dayKey();
+  const list = pinnedFor(data.habits);
+  if (!list.length) return null;
+  const done = list.filter((x) => doneOn(data.habitLogs, x.id, today)).length;
+  const sorted = [...list].sort((a, b) => Number(doneOn(data.habitLogs, a.id, today)) - Number(doneOn(data.habitLogs, b.id, today)));
+
+  return (
+    <div className="section">
+      <div className="section-head">
+        <h2 className="row" style={{ gap: 8 }}><IconPin size={20} color="var(--accent)" /> Привычки на сегодня</h2>
+        <span className="small muted">{done} из {list.length}{done < list.length && list.length > 1 ? ` · за все бонус +${ALL_HABITS_BONUS}` : done === list.length ? ' · всё сделано!' : ''}</span>
+      </div>
+      <div style={{ marginBottom: 10 }}><Bar value={done / list.length} color="var(--success)" /></div>
+      <div className="card" style={{ padding: '6px 14px' }}>
+        {sorted.map((x) => {
+          const on = doneOn(data.habitLogs, x.id, today);
+          const streak = habitStreak(data.habitLogs, x);
+          const cat = CATEGORIES[x.category] ?? CATEGORIES.care;
+          return (
+            <div key={x.id} className={`step-row ${on ? 'done' : ''}`}>
+              <Check on={on} label="Привычка выполнена" onClick={() => toggle(x.id)} />
+              <span className="tint-sub" style={{ ...colorVars(cat.color), display: 'inline-flex' }}><DynIcon name={x.icon} size={18} /></span>
+              <div className="grow">
+                <p className="step-title" style={{ fontWeight: 700 }}>{x.title}</p>
+                <p className="small faint">{x.minutes} мин{streak > 1 ? ` · ${streak} подряд` : ''}{x.anchor ? ` · ${x.anchor.charAt(0).toLowerCase() + x.anchor.slice(1)}` : ''}</p>
+              </div>
+              <span className="pill gold" style={{ fontSize: 12, padding: '2px 9px' }}>+{habitPoints(x)}</span>
+            </div>
+          );
+        })}
+      </div>
+      {onOpenAll && <button className="btn sm ghost" style={{ marginTop: 6 }} onClick={onOpenAll}>Все привычки</button>}
+    </div>
+  );
+}
