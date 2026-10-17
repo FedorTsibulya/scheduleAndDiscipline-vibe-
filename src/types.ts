@@ -126,6 +126,7 @@ export interface Settings {
   notifications: boolean;
   midReminder: boolean;
   theme: 'auto' | 'light' | 'dark';
+  dayStartHour?: number; // во сколько начинается новый день (0–6); до этого часа — ещё вчера
   habitCategories?: HabitCategory[]; // какие категории простых дел показывать в пуле (нет — все)
   onboarded?: boolean; // пройдено первое знакомство с приложением
 }

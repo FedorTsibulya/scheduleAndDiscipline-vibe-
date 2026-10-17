@@ -4,14 +4,14 @@ import type {
   ActiveTimer, AppData, Habit, Mood, PointsEvent, PointsKind, Reward, Session, Settings, Step, SyncConfig, Task,
 } from './types';
 import { emptyData } from './lib/defaults';
-import { dayKey, uid } from './lib/util';
+import { dayKey, dayStartTs, parseDay, setDayStartHour, uid } from './lib/util';
 import { ALL_HABITS_BONUS, habitPoints, pinnedFor, upgradeBuiltinHabits } from './lib/habits';
 import { isComplete } from './lib/progress';
 import { ACHIEVEMENTS, buildCtx } from './lib/achievements';
 import type { AiConfig, WeeklyReview } from './lib/ai';
 import { buildMerged, planReopen, type MergeMode } from './lib/taskOps';
 import { dueFromKind } from './lib/deadline';
-import { ACHIEVEMENT_BONUS, TASK_BONUS, focusPoints, levelInfo, stepPoints, totalXp } from './lib/game';
+import { ACHIEVEMENT_BONUS, TASK_BONUS, balance, focusPoints, levelInfo, stepPoints, totalXp } from './lib/game';
 
 // ---------- праздники (не сохраняются) ----------
 
@@ -22,9 +22,11 @@ export type Celebration =
   | { id: string; type: 'level'; level: number }
   | { id: string; type: 'focus'; points: number; minutes: number }
   | { id: string; type: 'habit'; points: number; title: string }
-  | { id: string; type: 'allHabits'; points: number; count: number };
+  | { id: string; type: 'allHabits'; points: number; count: number }
+  | { id: string; type: 'undo'; points: number };
 
 type CelebrationInput =
+  | { type: 'undo'; points: number }
   | { type: 'habit'; points: number; title: string }
   | { type: 'allHabits'; points: number; count: number }
   | { type: 'step'; points: number; postponed: number }
@@ -56,7 +58,7 @@ interface State {
   scheduleStep: (taskId: string, stepId: string, date: string | undefined) => void;
 
   // простые дела и привычки
-  toggleHabit: (habitId: string) => void;
+  toggleHabit: (habitId: string, day?: string) => void;
   saveHabit: (h: Habit) => void;
   deleteHabit: (id: string) => void;
 
@@ -95,9 +97,37 @@ const pointsEvent = (kind: PointsKind, amount: number, reason: string, extra: Pa
   id: uid(), updatedAt: now(), at: now(), kind, amount, reason, ...extra,
 });
 
+// При отмене (вернуть задачу, снять отметку шага или привычки) достижения, условие которых
+// больше не выполняется, отзываются вместе со своими очками — иначе отмена «не возвращает» награду
+function revokeLost(data: AppData): { data: AppData; points: number } {
+  const ctx = buildCtx(data);
+  const lost = ACHIEVEMENTS.filter((a) => data.achievements.some((u) => u.id === a.id && !u.deleted) && !a.check(ctx));
+  if (!lost.length) return { data, points: 0 };
+  const ids = new Set(lost.map((a) => a.id));
+  // старые события очков за достижения не хранят id — узнаём их по тексту
+  const isLost = (p: PointsEvent) =>
+    !p.deleted && p.kind === 'achievement' && lost.some((a) => p.stepId === a.id || p.reason === `Достижение: ${a.title}`);
+  const removed = data.points.filter(isLost).reduce((a, p) => a + p.amount, 0);
+  return {
+    points: removed,
+    data: {
+      ...data,
+      achievements: data.achievements.map((u) => (ids.has(u.id) && !u.deleted ? { ...u, deleted: true, updatedAt: now() } : u)),
+      points: data.points.map((p) => (isLost(p) ? { ...p, deleted: true, updatedAt: now() } : p)),
+    },
+  };
+}
+
 // После каждого изменения: проверяем новые достижения и повышение уровня
-function withRewards(prev: AppData, next: AppData, extra: CelebrationInput[]): { data: AppData; cel: CelebrationInput[] } {
+function withRewards(prev: AppData, next: AppData, extra: CelebrationInput[], revoke = false): { data: AppData; cel: CelebrationInput[] } {
   const cel = [...extra];
+  if (revoke) {
+    const r = revokeLost(next);
+    next = r.data;
+    // сколько очков снято всего: разница баланса до и после
+    const lostTotal = balance(prev.points) - balance(next.points);
+    if (lostTotal > 0) cel.push({ type: 'undo', points: lostTotal });
+  }
   const unlocked = new Set(next.achievements.filter((a) => !a.deleted).map((a) => a.id));
   const ctx = buildCtx(next);
   const fresh = ACHIEVEMENTS.filter((a) => !unlocked.has(a.id) && a.check(ctx));
@@ -111,7 +141,7 @@ function withRewards(prev: AppData, next: AppData, extra: CelebrationInput[]): {
       ],
       points: [
         ...data.points,
-        ...fresh.map((f) => pointsEvent('achievement', ACHIEVEMENT_BONUS, `Достижение: ${f.title}`)),
+        ...fresh.map((f) => pointsEvent('achievement', ACHIEVEMENT_BONUS, `Достижение: ${f.title}`, { stepId: f.id })),
       ],
     };
     for (const f of fresh) cel.push({ type: 'achievement', achievementId: f.id });
@@ -128,9 +158,9 @@ export const useStore = create<State>()(
   persist(
     (set, get) => {
       // Применить изменение данных с проверкой наград и праздников
-      const commit = (fn: (d: AppData) => AppData, extra: CelebrationInput[] = []) => {
+      const commit = (fn: (d: AppData) => AppData, extra: CelebrationInput[] = [], opts: { revoke?: boolean } = {}) => {
         const prev = get().data;
-        const { data, cel } = withRewards(prev, fn(prev), extra);
+        const { data, cel } = withRewards(prev, fn(prev), extra, opts.revoke);
         set((s) => ({
           data,
           celebrations: [...s.celebrations, ...cel.map((c) => ({ ...c, id: uid() }) as Celebration)],
@@ -208,7 +238,7 @@ export const useStore = create<State>()(
                   : p,
               ),
             };
-          }, cel);
+          }, cel, { revoke: step.done });
         },
 
         // Завершить задачу целиком (для задач без шагов или «закрыть досрочно»)
@@ -249,7 +279,7 @@ export const useStore = create<State>()(
               steps: t.steps.map((s) => (undo.has(s.id) ? { ...s, done: false, doneAt: undefined } : s)),
             })),
             points: d.points.map((p) => (drop.has(p.id) ? { ...p, deleted: true, updatedAt: now() } : p)),
-          }));
+          }), [], { revoke: true });
         },
 
         // Объединить несколько задач в одну большую: маленькие становятся её шагами
@@ -270,31 +300,39 @@ export const useStore = create<State>()(
           commit((d) => mapTask(d, taskId, (t) => ({ ...t, steps: t.steps.map((s) => (s.id === stepId ? { ...s, date } : s)) }))),
 
         // Отметить простое дело за сегодня (повторное нажатие снимает отметку и очки)
-        toggleHabit: (habitId) => {
+        // day — отметить за прошедший день (например, за вчера, если забыли); по умолчанию сегодня
+        toggleHabit: (habitId, day) => {
           const d0 = get().data;
           const habit = d0.habits.find((x) => x.id === habitId);
           if (!habit) return;
-          const today = dayKey();
+          const today = day ?? dayKey();
+          const isPast = today !== dayKey();
           const bonusId = `all-${today}`; // stepId бонуса «все закреплённые привычки за день»
           const existing = d0.habitLogs.find((l) => !l.deleted && l.habitId === habitId && l.day === today);
           if (existing) {
             // отмена: снимаем очки за это дело и, если был, бонус за весь день
-            commit((d) => ({
-              ...d,
-              habitLogs: d.habitLogs.map((l) => (l.id === existing.id ? { ...l, deleted: true, updatedAt: now() } : l)),
-              points: d.points.map((p) =>
-                !p.deleted && p.kind === 'habit' && (p.stepId === existing.id || (habit.mine && p.stepId === bonusId))
-                  ? { ...p, deleted: true, updatedAt: now() }
-                  : p,
-              ),
-            }));
+            commit(
+              (d) => ({
+                ...d,
+                habitLogs: d.habitLogs.map((l) => (l.id === existing.id ? { ...l, deleted: true, updatedAt: now() } : l)),
+                points: d.points.map((p) =>
+                  !p.deleted && p.kind === 'habit' && (p.stepId === existing.id || (habit.mine && p.stepId === bonusId))
+                    ? { ...p, deleted: true, updatedAt: now() }
+                    : p,
+                ),
+              }),
+              [],
+              { revoke: true },
+            );
             return;
           }
-          const log = { id: uid(), updatedAt: now(), habitId, day: today, at: now() };
+          // отметка за прошедший день ставится на его вечер — так она попадает в статистику того дня
+          const at = isPast ? dayStartTs(parseDay(today)) + 16 * 3600000 : now();
+          const log = { id: uid(), updatedAt: now(), habitId, day: today, at };
           const pts = habitPoints(habit);
           const label = (habit.tier ?? 'easy') === 'hard' ? 'Дело' : 'Простое дело';
           // все ли закреплённые на сегодня привычки будут сделаны после этой отметки
-          const pinned = pinnedFor(d0.habits, d0.habitLogs);
+          const pinned = pinnedFor(d0.habits, d0.habitLogs, parseDay(today));
           const allDone =
             pinned.length > 1 && pinned.some((x) => x.id === habitId) &&
             pinned.every((x) => x.id === habitId || d0.habitLogs.some((l) => !l.deleted && l.habitId === x.id && l.day === today)) &&
@@ -434,6 +472,12 @@ export const useStore = create<State>()(
     },
   ),
 );
+
+// Начало дня из настроек: применяем сразу после загрузки сохранённых данных и при каждом изменении.
+// По умолчанию день начинается в 04:00 — сделанное после полуночи засчитывается за вчера.
+const applyDayStart = (s: State) => setDayStartHour(s.data.settings.dayStartHour ?? 4);
+applyDayStart(useStore.getState());
+useStore.subscribe(applyDayStart);
 
 // Удобные выборки
 export const useData = () => useStore((s) => s.data);

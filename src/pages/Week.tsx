@@ -6,7 +6,7 @@ import { useUI } from '../uiStore';
 import { PALETTE } from '../lib/colors';
 import { CATEGORIES, calendarPlan, freqOf, weeklyProgress } from '../lib/habits';
 import { DynIcon } from '../lib/icons';
-import { addDays, dayKey, dayLabel, formatMin, startOfWeek, weekdayShort } from '../lib/util';
+import { addDays, appNow, dayKey, dayLabel, formatMin, parseDay, startOfWeek, weekdayShort } from '../lib/util';
 import { Bar, colorVars } from '../components/ui';
 
 type Item = { t: Task; s: Step };
@@ -53,19 +53,19 @@ function StepChip({ it, days, onMove }: { it: Item; days: Date[]; onMove: (it: I
   );
 }
 
-// Привычка в дне календаря: пунктирная рамка, отметить можно только сегодня
-function HabitChip({ habit, done, missed, isToday }: { habit: Habit; done: boolean; missed: boolean; isToday: boolean }) {
+// Привычка в дне календаря: пунктирная рамка; отметить можно за сегодня и за вчера (если забыли)
+function HabitChip({ habit, done, missed, day, canMark, isToday }: { habit: Habit; done: boolean; missed: boolean; day: string; canMark: boolean; isToday: boolean }) {
   const toggle = useStore((s) => s.toggleHabit);
   const color = (CATEGORIES[habit.category] ?? CATEGORIES.care).color;
   const p = PALETTE[color];
   return (
     <div className={`step-chip tint ${done ? 'done' : ''}`}
       style={{ ...colorVars(color), borderStyle: 'dashed', cursor: 'default', opacity: missed ? 0.5 : undefined }}
-      title={missed ? 'Пропущено' : isToday ? 'Привычка на сегодня' : 'Запланированная привычка'}>
+      title={missed ? (canMark ? 'Пропущено — можно отметить за вчера' : 'Пропущено') : isToday ? 'Привычка на сегодня' : 'Запланированная привычка'}>
       <div className="row" style={{ gap: 6, alignItems: 'flex-start' }}>
-        {isToday ? (
+        {canMark ? (
           <button className="check" style={{ width: 18, height: 18, borderRadius: 9, borderColor: p[400], background: done ? p[400] : 'transparent' }}
-            onClick={() => toggle(habit.id)} aria-label="Привычка выполнена">
+            onClick={() => toggle(habit.id, day)} aria-label={isToday ? 'Привычка выполнена' : 'Отметить за вчера'}>
             {done && <IconCheck size={12} stroke={3} />}
           </button>
         ) : (
@@ -86,9 +86,10 @@ export function WeekPage() {
   const schedule = useStore((s) => s.scheduleStep);
   const [offset, setOffset] = useState(0);
   const [over, setOver] = useState<string | null>(null);
-  const start = addDays(startOfWeek(new Date()), offset * 7);
+  const start = addDays(startOfWeek(appNow()), offset * 7);
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const today = dayKey();
+  const yesterday = dayKey(addDays(parseDay(today), -1));
   const cap = data.settings.dailyCapacityMin;
 
   const tasks = liveTasks(data).filter((t) => !t.inbox && !t.completedAt);
@@ -181,7 +182,7 @@ export function WeekPage() {
               </div>
               <Bar value={Math.min(1, ratio)} color={color} thin />
               <span className="small faint" style={{ marginTop: -2 }}>{formatMin(load)} из {formatMin(cap)}{ratio > 1 ? ' — перегруз!' : ''}</span>
-              {habitsHere.map(({ h, plan }) => <HabitChip key={h.id} habit={h} done={plan.done} missed={plan.missed} isToday={key === today} />)}
+              {habitsHere.map(({ h, plan }) => <HabitChip key={h.id} habit={h} done={plan.done} missed={plan.missed} day={key} isToday={key === today} canMark={key === today || key === yesterday} />)}
               {list.map((it) => <StepChip key={it.s.id} it={it} days={days} onMove={move} />)}
             </div>
           );

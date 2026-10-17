@@ -3,8 +3,24 @@ export const uid = () =>
 
 export const pad = (n: number) => String(n).padStart(2, '0');
 
-export const dayKey = (d: Date | number = new Date()) => {
-  const x = typeof d === 'number' ? new Date(d) : d;
+// Час, в который начинается новый день (настройка). Всё, что сделано после полуночи и до этого
+// часа, засчитывается за предыдущий день — для тех, кто работает за полночь.
+let dayStartHour = 0;
+export const setDayStartHour = (h: number) => {
+  dayStartHour = Math.min(8, Math.max(0, Math.round(h)));
+};
+const shift = () => dayStartHour * 3600000;
+
+// Момент начала дня приложения для календарной даты (полночь + час начала дня)
+export const dayStartTs = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() + shift();
+
+// «Сейчас» в днях приложения: в 01:30 при начале дня в 04:00 это ещё вчерашний вечер
+export const appNow = () => new Date(Date.now() - shift());
+
+// Ключ дня YYYY-MM-DD. Метка времени (число) — момент события, к ней применяется начало дня;
+// объект Date — уже календарный день (например, колонка недели), он не сдвигается.
+export const dayKey = (d: Date | number = appNow()) => {
+  const x = typeof d === 'number' ? new Date(d - shift()) : d;
   return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
 };
 

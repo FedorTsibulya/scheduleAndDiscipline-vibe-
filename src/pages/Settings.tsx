@@ -195,7 +195,17 @@ export function SettingsPage() {
             <NumField label="Отдых, мин" value={settings.restMin} onChange={(v) => update({ restMin: v })} max={60} />
             <NumField label="Длинный отдых, мин" value={settings.longRestMin} onChange={(v) => update({ longRestMin: v })} max={90} />
             <NumField label="Работы в день, мин" value={settings.dailyCapacityMin} onChange={(v) => update({ dailyCapacityMin: v })} max={960} />
+            <div className="field" style={{ width: 190 }}>
+              <label htmlFor="s-daystart">Новый день начинается в</label>
+              <select id="s-daystart" className="select" value={settings.dayStartHour ?? 4} onChange={(e) => update({ dayStartHour: +e.target.value })}>
+                {[0, 1, 2, 3, 4, 5, 6].map((h) => <option key={h} value={h}>{String(h).padStart(2, '0')}:00{h === 0 ? ' (в полночь)' : ''}</option>)}
+              </select>
+            </div>
           </div>
+          <p className="small faint" style={{ marginTop: 8 }}>
+            Всё, что сделано после полуночи и до начала нового дня, засчитывается за предыдущий день: шаги, привычки, фокус и серия.
+            Удобно, если вы часто доделываете дела после 00:00.
+          </p>
           <p className="small faint" style={{ marginTop: 8 }}>«Работы в день» используется для полоски загрузки на экране «Неделя». Длинный отдых предлагается после каждого 4-го фокуса.</p>
           <div className="stack" style={{ marginTop: 14 }}>
             <div className="row wrap" style={{ justifyContent: 'space-between' }}>

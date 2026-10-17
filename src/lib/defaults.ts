@@ -30,6 +30,7 @@ export const DEFAULT_SETTINGS: Settings = {
   notifications: true,
   midReminder: true,
   theme: 'auto',
+  dayStartHour: 4,
 };
 
 export const emptyData = (): AppData => ({

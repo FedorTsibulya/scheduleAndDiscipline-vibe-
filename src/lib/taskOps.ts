@@ -7,7 +7,9 @@ import { uid } from './util';
 // Если задача закрылась обычной отметкой последнего шага — откатываем этот последний шаг.
 export function planReopen(task: Task, points: PointsEvent[]) {
   const at = task.completedAt ?? 0;
-  const near = (t?: number) => !!t && t >= at - 2000;
+  // «в момент завершения» — в пределах долей секунды: кнопка «Готово» отмечает все оставшиеся шаги разом,
+  // а шаги, отмеченные раньше вручную (пусть и за секунду до этого), откатывать не нужно
+  const near = (t?: number) => !!t && Math.abs(t - at) < 300;
   let stepIds = task.steps.filter((s) => s.done && near(s.doneAt)).map((s) => s.id);
   if (!stepIds.length && task.steps.some((s) => s.done)) {
     const last = [...task.steps].filter((s) => s.done).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0))[0];

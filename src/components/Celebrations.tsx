@@ -21,23 +21,29 @@ function burst(big: boolean) {
 }
 
 // Маленький праздник: конфетти + ободряющая фраза (на каждый шаг и полный фокус)
-function Cheer({ c }: { c: Extract<Celebration, { type: 'step' | 'focus' | 'habit' }> }) {
+function Cheer({ c }: { c: Extract<Celebration, { type: 'step' | 'focus' | 'habit' | 'undo' }> }) {
   const dismiss = useStore((s) => s.dismissCelebration);
   const sound = useStore((s) => s.data.settings.sound);
+  const undo = c.type === 'undo';
   const text = useRef(
-    c.type === 'step'
-      ? `${pick(CHEERS)} +${c.points}${c.postponed ? ' (бонус за отложенное)' : ''}`
-      : c.type === 'habit'
-        ? `${pick(CHEERS)} Маленький шаг считается. +${c.points}`
-        : `Фокус ${c.minutes} мин выполнен! +${c.points}`,
+    c.type === 'undo'
+      ? `Отменено · −${c.points} ${plural(c.points, 'очко', 'очка', 'очков')}`
+      : c.type === 'step'
+        ? `${pick(CHEERS)} +${c.points}${c.postponed ? ' (бонус за отложенное)' : ''}`
+        : c.type === 'habit'
+          ? `${pick(CHEERS)} Маленький шаг считается. +${c.points}`
+          : `Фокус ${c.minutes} мин выполнен! +${c.points}`,
   );
   useEffect(() => {
-    burst(false);
-    if (sound) playPop();
+    // отмена — без конфетти и звука
+    if (!undo) {
+      burst(false);
+      if (sound) playPop();
+    }
     const id = setTimeout(() => dismiss(c.id), 1900);
     return () => clearTimeout(id);
-  }, [c.id, dismiss, sound]);
-  return <div className="cheer" role="status">{text.current}</div>;
+  }, [c.id, dismiss, sound, undo]);
+  return <div className="cheer" role="status" style={undo ? { background: 'var(--surface-3)', color: 'var(--text)' } : undefined}>{text.current}</div>;
 }
 
 // Большая плашка: задача завершена, новое достижение, новый уровень
@@ -105,8 +111,8 @@ function Trophy({ c }: { c: Extract<Celebration, { type: 'task' | 'achievement' 
 export function Celebrations() {
   const list = useStore((s) => s.celebrations);
   const big = list.find((c) => c.type === 'task' || c.type === 'achievement' || c.type === 'level' || c.type === 'allHabits');
-  const small = list.find((c) => c.type === 'step' || c.type === 'focus' || c.type === 'habit');
+  const small = list.find((c) => c.type === 'step' || c.type === 'focus' || c.type === 'habit' || c.type === 'undo');
   if (big) return <Trophy key={big.id} c={big as Extract<Celebration, { type: 'task' | 'achievement' | 'level' | 'allHabits' }>} />;
-  if (small) return <Cheer key={small.id} c={small as Extract<Celebration, { type: 'step' | 'focus' | 'habit' }>} />;
+  if (small) return <Cheer key={small.id} c={small as Extract<Celebration, { type: 'step' | 'focus' | 'habit' | 'undo' }>} />;
   return null;
 }

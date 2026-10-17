@@ -10,7 +10,7 @@ import {
   scheduleLabel, scheduledOn, streakLabel, timesOf, visibleInPool, type Freq,
 } from '../lib/habits';
 import { DynIcon, ICON_KEYS } from '../lib/icons';
-import { addDays, dayKey, uid, weekdayShort } from '../lib/util';
+import { addDays, appNow, dayKey, uid, weekdayShort } from '../lib/util';
 import { Modal } from './Modal';
 import { Bar, Check, Seg, Switch, colorVars } from './ui';
 
@@ -19,7 +19,7 @@ const tierOf = (h: Habit): HabitTier => h.tier ?? 'easy';
 // Последние 7 дней: зелёный — сделано, серый — не сделано, бледный — не запланировано
 function WeekDots({ habit }: { habit: Habit }) {
   const logs = useStore((s) => s.data.habitLogs);
-  const today = new Date();
+  const today = appNow();
   const days = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6));
   return (
     <div className="row" style={{ gap: 4 }} aria-label="Последние 7 дней">

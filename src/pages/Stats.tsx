@@ -9,9 +9,10 @@ import { DASHES, PALETTE, SERIES, SERIES_DARK } from '../lib/colors';
 import { taskProgress } from '../lib/progress';
 import { activeDays, bestStreak, computeStreak } from '../lib/game';
 import { DynIcon } from '../lib/icons';
-import { addDays, dayKey, dayLabel, formatMin, weekdayShort } from '../lib/util';
+import { addDays, appNow, dayKey, dayLabel, dayStartTs, formatMin, weekdayShort } from '../lib/util';
 
-const endOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).getTime();
+// конец дня приложения (с учётом часа начала дня)
+const endOfDay = (d: Date) => dayStartTs(d) + 86400000 - 1;
 
 export function StatsPage() {
   const data = useStore((s) => s.data);
@@ -28,9 +29,9 @@ export function StatsPage() {
     return () => mq.removeEventListener('change', fn);
   }, []);
 
-  const today = new Date();
+  const today = appNow();
   const days = useMemo(() => Array.from({ length: range }, (_, i) => addDays(today, i - range + 1)), [range, today.toDateString()]);
-  const fromTs = new Date(days[0].getFullYear(), days[0].getMonth(), days[0].getDate()).getTime();
+  const fromTs = dayStartTs(days[0]);
   const tasks = liveTasks(data).filter((t) => !t.inbox);
   const focus = data.sessions.filter((s) => !s.deleted && s.kind === 'focus');
   const focusInRange = focus.filter((s) => s.start >= fromTs);

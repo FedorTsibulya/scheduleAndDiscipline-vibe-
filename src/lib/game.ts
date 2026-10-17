@@ -1,5 +1,5 @@
 import type { AppData, PointsEvent, Task } from '../types';
-import { addDays, dayKey } from './util';
+import { addDays, appNow, dayKey } from './util';
 
 export const TASK_BONUS = 50;
 export const ACHIEVEMENT_BONUS = 25;
@@ -55,7 +55,7 @@ export function activeDays(data: AppData): Set<string> {
 
 // Серия дней подряд с «заморозкой»: один пропущенный день в 7 дней не обнуляет серию.
 // Считается из истории, поэтому одинаково на всех устройствах.
-export function computeStreak(active: Set<string>, now = new Date()) {
+export function computeStreak(active: Set<string>, now = appNow()) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const keys = [...active].sort();
   const empty = { current: 0, todayDone: false, freezeReady: true, freezeUsedOn: undefined as string | undefined, readyIn: 0 };

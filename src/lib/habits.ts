@@ -1,5 +1,5 @@
 import type { AppData, ColorKey, Habit, HabitCategory, HabitLog, HabitTier } from '../types';
-import { addDays, dayKey, parseDay } from './util';
+import { addDays, appNow, dayKey, parseDay } from './util';
 
 // Награда: простое дело +5; дело посерьёзнее +15, а от 30 минут +20
 export const habitPoints = (h: Pick<Habit, 'tier' | 'minutes'>) =>
@@ -82,7 +82,7 @@ const doneInWeek = (days: string[], d: Date) => {
 };
 
 // Нужно ли делать закреплённую привычку в этот день (сделанная сегодня тоже показывается — уже отмеченной)
-export function isDueOn(h: Habit, logs: HabitLog[], d = new Date()): boolean {
+export function isDueOn(h: Habit, logs: HabitLog[], d = appNow()): boolean {
   const today = dayKey(d);
   const days = doneDays(logs, h.id);
   if (days.includes(today)) return true;
@@ -99,7 +99,7 @@ export function isDueOn(h: Habit, logs: HabitLog[], d = new Date()): boolean {
 // Прошедшие дни — по факту (что было сделано, и что пропущено по расписанию).
 // Будущие: по дням недели — по расписанию; «раз в N дней» — прогноз от последнего выполнения;
 // «N раз в неделю» конкретных дней нет — такие показываются отдельной строкой над неделей.
-export function calendarPlan(h: Habit, logs: HabitLog[], d: Date, now = new Date()): { show: boolean; done: boolean; missed: boolean } {
+export function calendarPlan(h: Habit, logs: HabitLog[], d: Date, now = appNow()): { show: boolean; done: boolean; missed: boolean } {
   const key = dayKey(d);
   const today = dayKey(now);
   const days = doneDays(logs, h.id);
@@ -127,7 +127,7 @@ export const weeklyProgress = (h: Habit, logs: HabitLog[], weekDay: Date) => ({
 });
 
 // Подсказка о периоде: «на этой неделе 1 из 2», «следующий раз через 2 дня»
-export function periodInfo(h: Habit, logs: HabitLog[], d = new Date()): string | null {
+export function periodInfo(h: Habit, logs: HabitLog[], d = appNow()): string | null {
   const f = freqOf(h);
   const days = doneDays(logs, h.id);
   if (f === 'weekly') return `на этой неделе ${Math.min(doneInWeek(days, d), timesOf(h))} из ${timesOf(h)}`;
@@ -440,7 +440,7 @@ export const doneOn = (logs: HabitLog[], habitId: string, day: string) =>
 // По дням недели: незапланированные дни серию не прерывают. «Раз в N дней»: между выполнениями
 // не больше N дней. «N раз в неделю»: считаются недели, в которых норма выполнена.
 // Текущий день/период ещё не закончен — его невыполнение серию не обнуляет.
-export function habitStreak(logs: HabitLog[], habit: Habit, now = new Date()): number {
+export function habitStreak(logs: HabitLog[], habit: Habit, now = appNow()): number {
   const days = doneDays(logs, habit.id);
   const today = startOfDay(now);
   const f = habit.mine ? freqOf(habit) : 'days';
@@ -520,5 +520,5 @@ export function bestHabitStreak(data: Pick<AppData, 'habits' | 'habitLogs'>) {
 }
 
 // Закреплённые привычки, которые нужно сделать в этот день
-export const pinnedFor = (habits: Habit[], logs: HabitLog[], d = new Date()) =>
+export const pinnedFor = (habits: Habit[], logs: HabitLog[], d = appNow()) =>
   habits.filter((x) => !x.deleted && x.mine && isDueOn(x, logs, d));
