@@ -5,7 +5,7 @@ import {
   IconSun, IconMoon, IconCloudRain, IconFlame, IconIceCream, IconShoppingBag, IconBath,
   IconDroplet, IconWind, IconBed, IconStretching, IconWalk, IconMessageCircle, IconNotebook, IconEye,
   IconToolsKitchen2, IconHanger, IconPhoto, IconLungs, IconPhoneOff, IconBarbell, IconInbox,
-  IconYoga, IconHome, IconWashMachine, IconBox, IconChefHat, IconPhoneCall, IconBrush, IconPuzzle,
+  IconYoga, IconHome, IconWashMachine, IconBox, IconChefHat, IconPhoneCall, IconBrush, IconPuzzle, IconCoin, IconCalendar,
   type Icon,
 } from '@tabler/icons-react';
 
@@ -61,6 +61,8 @@ export const ICONS: Record<string, Icon> = {
   phone: IconPhoneCall,
   brush: IconBrush,
   puzzle: IconPuzzle,
+  coin: IconCoin,
+  calendar: IconCalendar,
 };
 
 export const ICON_KEYS = Object.keys(ICONS);

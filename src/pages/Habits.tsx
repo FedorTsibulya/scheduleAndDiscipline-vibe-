@@ -1,22 +1,33 @@
 import { useState } from 'react';
-import { IconPlus, IconPin, IconBulb, IconBatteryOff, IconFlame, IconLeaf } from '@tabler/icons-react';
+import { IconPlus, IconPin, IconBulb, IconBatteryOff, IconFlame, IconLeaf, IconAdjustments, IconEye, IconEyeOff } from '@tabler/icons-react';
 import type { HabitCategory } from '../types';
 import { liveHabits, useStore } from '../store';
-import { ALL_HABITS_BONUS, CATEGORIES, HABIT_ADVICE, doneOn, pinnedFor } from '../lib/habits';
+import {
+  ALL_HABITS_BONUS, CATEGORIES, CATEGORY_ORDER, DEFAULT_CATEGORIES, HABIT_ADVICE, doneOn, pinnedFor, visibleInPool,
+} from '../lib/habits';
+import { CategoryDialog, CategoryPicker } from '../components/HabitSetup';
 import { dayKey } from '../lib/util';
 import { HabitCard, HabitEditor, HabitPicker, newHabit } from '../components/Habits';
 import { Bar, Seg } from '../components/ui';
 
 export function HabitsPage() {
   const data = useStore((s) => s.data);
+  const update = useStore((s) => s.updateSettings);
   const [cat, setCat] = useState<HabitCategory | 'all'>('all');
   const [adding, setAdding] = useState(false);
+  const [setup, setSetup] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
+  const [firstPick, setFirstPick] = useState<HabitCategory[]>(DEFAULT_CATEGORIES);
+  const cats = data.settings.habitCategories;
   const habits = liveHabits(data);
   const pinned = habits.filter((h) => h.mine);
   const todayList = pinnedFor(data.habits, data.habitLogs);
   const today = dayKey();
   const todayDone = todayList.filter((h) => doneOn(data.habitLogs, h.id, today)).length;
-  const inCat = habits.filter((h) => cat === 'all' || h.category === cat).sort((a, b) => a.minutes - b.minutes);
+  const visible = habits.filter((h) => visibleInPool(h, cats));
+  const hiddenOnes = habits.filter((h) => !visibleInPool(h, cats));
+  const shownCats = CATEGORY_ORDER.filter((c) => visible.some((h) => h.category === c));
+  const inCat = (showHidden ? habits : visible).filter((h) => cat === 'all' || h.category === cat).sort((a, b) => a.minutes - b.minutes);
   const easy = inCat.filter((h) => (h.tier ?? 'easy') === 'easy');
   const hard = inCat.filter((h) => h.tier === 'hard');
 
@@ -27,8 +38,22 @@ export function HabitsPage() {
           <h1>Привычки и простые дела</h1>
           <p className="sub">Закрепляйте привычки, чтобы выполнять их регулярно, а в дни без сил выбирайте дела на 1–10 минут.</p>
         </div>
-        <button className="btn primary" onClick={() => setAdding(true)}><IconPlus size={18} /> Своё дело</button>
+        <div className="row wrap">
+          <button className="btn" onClick={() => setSetup(true)}><IconAdjustments size={18} /> Настроить пул</button>
+          <button className="btn primary" onClick={() => setAdding(true)}><IconPlus size={18} /> Своё дело</button>
+        </div>
       </div>
+
+      {!cats && (
+        <div className="card hero section" style={{ marginTop: 0, marginBottom: 20 }}>
+          <h2 style={{ marginBottom: 4 }}>Настройте пул под себя</h2>
+          <p className="small muted" style={{ marginBottom: 12 }}>Отметьте, какие дела вам интересны. Остальные категории уйдут из пула и из подборки «Нет настроения» — вернуть их можно в любой момент.</p>
+          <CategoryPicker value={firstPick} onChange={setFirstPick} />
+          <div className="row" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
+            <button className="btn primary" disabled={!firstPick.length} onClick={() => update({ habitCategories: firstPick })}>Готово</button>
+          </div>
+        </div>
+      )}
 
       <div className="section" style={{ marginTop: 0 }}>
         <div className="section-head">
@@ -57,8 +82,13 @@ export function HabitsPage() {
         <div className="section-head">
           <h2>Все дела</h2>
           <Seg<HabitCategory | 'all'> value={cat} onChange={setCat}
-            options={[{ v: 'all', label: 'Все' }, ...(Object.keys(CATEGORIES) as HabitCategory[]).map((k) => ({ v: k, label: CATEGORIES[k].label }))]} />
+            options={[{ v: 'all', label: 'Все' }, ...(showHidden ? CATEGORY_ORDER : shownCats).map((k) => ({ v: k, label: CATEGORIES[k].label }))]} />
         </div>
+        {hiddenOnes.length > 0 && (
+          <button className="btn sm ghost" style={{ marginBottom: 8 }} onClick={() => setShowHidden(!showHidden)}>
+            {showHidden ? <IconEyeOff size={15} /> : <IconEye size={15} />} {showHidden ? 'Показывать только мой пул' : `Показать скрытые и выключенные (${hiddenOnes.length})`}
+          </button>
+        )}
 
         {easy.length > 0 && (
           <>
@@ -87,6 +117,7 @@ export function HabitsPage() {
       </div>
 
       {adding && <HabitEditor habit={newHabit()} onClose={() => setAdding(false)} />}
+      {setup && <CategoryDialog onClose={() => setSetup(false)} />}
     </div>
   );
 }

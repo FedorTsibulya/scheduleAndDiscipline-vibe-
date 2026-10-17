@@ -410,12 +410,15 @@ export const useStore = create<State>()(
     },
     {
       name: 'focus-quest',
-      version: 4,
+      version: 5,
       // v2: пул простых дел и привычек; v3: дела посерьёзнее, расписание, обновлённый встроенный пул;
-      // v4: «срочно» заменено сроками — старые срочные задачи получают срок «2–3 дня»
+      // v4: «срочно» заменено сроками — старые срочные задачи получают срок «2–3 дня»;
+      // существующий пользователь уже знаком с приложением — приветствие ему не показываем
       migrate: (persisted, version) => {
         const s = persisted as { data?: AppData };
-        if (version < 3 && s.data) s.data = upgradeBuiltinHabits(s.data);
+        // v5: универсальный пул (новые категории, личные дела вместо узких встроенных)
+        if (version < 5 && s.data) s.data = upgradeBuiltinHabits(s.data);
+        if (version < 5 && s.data) s.data = { ...s.data, settings: { ...s.data.settings, onboarded: true } };
         if (version < 4 && s.data) {
           s.data = {
             ...s.data,

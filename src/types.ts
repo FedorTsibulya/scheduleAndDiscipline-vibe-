@@ -68,7 +68,7 @@ export interface Reward extends Syncable {
 
 export type PointsKind = 'step' | 'task' | 'focus' | 'achievement' | 'purchase' | 'habit';
 
-export type HabitCategory = 'body' | 'mind' | 'home' | 'care' | 'people' | 'hobby';
+export type HabitCategory = 'body' | 'mind' | 'plan' | 'study' | 'home' | 'care' | 'money' | 'people' | 'hobby';
 
 // easy — простое дело на 1–10 минут, hard — дело посерьёзнее с большей наградой
 export type HabitTier = 'easy' | 'hard';
@@ -92,6 +92,7 @@ export interface Habit extends Syncable {
   everyDays?: number;
   timesPerWeek?: number;
   builtIn?: boolean;
+  hidden?: boolean; // скрыто из пула (не подходит этому пользователю)
 }
 
 // Отметка «сделано» за конкретный день
@@ -124,6 +125,8 @@ export interface Settings {
   notifications: boolean;
   midReminder: boolean;
   theme: 'auto' | 'light' | 'dark';
+  habitCategories?: HabitCategory[]; // какие категории простых дел показывать в пуле (нет — все)
+  onboarded?: boolean; // пройдено первое знакомство с приложением
 }
 
 export interface AppData {

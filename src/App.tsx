@@ -4,6 +4,7 @@ import {
   IconCloudCheck, IconCloudX, IconRefresh, IconPlant2,
 } from '@tabler/icons-react';
 import { HabitsPage } from './pages/Habits';
+import { Onboarding } from './components/HabitSetup';
 import { useStore } from './store';
 import { useUI, type Page } from './uiStore';
 import { syncConfigured, canonical } from './lib/sync';
@@ -149,6 +150,7 @@ export default function App() {
       <TimerBar />
       <FocusScreen />
       <Celebrations />
+      <Onboarding />
     </div>
   );
 }

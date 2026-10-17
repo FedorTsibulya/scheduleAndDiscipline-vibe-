@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
 import {
   IconCheck, IconPin, IconPinnedOff, IconChevronDown, IconChevronUp, IconPencil, IconDice5, IconAnchor, IconBulb, IconHeart,
-  IconTrash, IconFlame, IconCoin, IconCalendarRepeat,
+  IconTrash, IconFlame, IconCoin, IconCalendarRepeat, IconEye, IconEyeOff,
 } from '@tabler/icons-react';
 import type { Habit, HabitCategory, HabitTier } from '../types';
 import { liveHabits, useStore } from '../store';
 import {
   ALL_HABITS_BONUS, CATEGORIES, TIERS, WEEKDAYS, doneOn, everyOf, freqOf, habitPoints, habitStreak, periodInfo, pinnedFor,
-  scheduleLabel, scheduledOn, streakLabel, timesOf, type Freq,
+  scheduleLabel, scheduledOn, streakLabel, timesOf, visibleInPool, type Freq,
 } from '../lib/habits';
 import { DynIcon, ICON_KEYS } from '../lib/icons';
 import { addDays, dayKey, uid, weekdayShort } from '../lib/util';
@@ -151,6 +151,7 @@ function PinDialog({ habit, onClose }: { habit: Habit; onClose: () => void }) {
 export function HabitCard({ habit, compact }: { habit: Habit; compact?: boolean }) {
   const logs = useStore((s) => s.data.habitLogs);
   const toggle = useStore((s) => s.toggleHabit);
+  const save = useStore((s) => s.saveHabit);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [pinning, setPinning] = useState(false);
@@ -197,7 +198,14 @@ export function HabitCard({ habit, compact }: { habit: Habit; compact?: boolean 
           {habit.why && <p className="row" style={{ alignItems: 'flex-start', gap: 6 }}><IconHeart size={16} style={{ flexShrink: 0, color: 'var(--accent)' }} /><span><b>Зачем:</b> {habit.why}</span></p>}
           {habit.tip && <p className="row" style={{ alignItems: 'flex-start', gap: 6 }}><IconBulb size={16} style={{ flexShrink: 0, color: 'var(--warning)' }} /><span><b>Как закрепить:</b> {habit.tip}</span></p>}
           {habit.anchor && <p className="row" style={{ alignItems: 'flex-start', gap: 6 }}><IconAnchor size={16} style={{ flexShrink: 0, color: 'var(--primary)' }} /><span><b>Якорь:</b> {habit.anchor.charAt(0).toLowerCase() + habit.anchor.slice(1)} → {habit.title.charAt(0).toLowerCase() + habit.title.slice(1)}</span></p>}
-          <div><button className="btn sm ghost" onClick={() => setEditing(true)}><IconPencil size={14} /> Изменить</button></div>
+          <div className="row wrap" style={{ gap: 4 }}>
+            <button className="btn sm ghost" onClick={() => setEditing(true)}><IconPencil size={14} /> Изменить</button>
+            {!habit.mine && (
+              <button className="btn sm ghost" onClick={() => save({ ...habit, hidden: !habit.hidden })}>
+                {habit.hidden ? <><IconEye size={14} /> Вернуть в пул</> : <><IconEyeOff size={14} /> Скрыть из пула</>}
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -307,7 +315,7 @@ export function HabitPicker({ count = 3 }: { count?: number }) {
   const data = useStore((s) => s.data);
   const [seed, setSeed] = useState(0);
   const today = dayKey();
-  const habits = liveHabits(data).filter((x) => tierOf(x) === 'easy');
+  const habits = liveHabits(data).filter((x) => tierOf(x) === 'easy' && visibleInPool(x, data.settings.habitCategories));
   const picks = useMemo(() => {
     const pool = habits.filter((x) => !doneOn(data.habitLogs, x.id, today));
     const weighted = pool.map((x) => ({ x, w: Math.random() * (x.mine ? 2 : 1) * (x.minutes <= 3 ? 1.5 : 1) }));
