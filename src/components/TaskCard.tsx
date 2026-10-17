@@ -1,4 +1,4 @@
-import { IconPlayerPlay, IconCheck, IconPencil, IconClock, IconAlertTriangle, IconFlame } from '@tabler/icons-react';
+import { IconPlayerPlay, IconCheck, IconPencil, IconAlertTriangle, IconFlame } from '@tabler/icons-react';
 import type { Task } from '../types';
 import { liveMoods, useStore } from '../store';
 import { useUI } from '../uiStore';
@@ -7,7 +7,7 @@ import { stepPoints } from '../lib/game';
 import { DynIcon } from '../lib/icons';
 import { PALETTE } from '../lib/colors';
 import { dayKey, formatMin } from '../lib/util';
-import { Bar, Dots, MoodTag, TaskIcon, CREATIVITY } from './ui';
+import { Bar, Dots, DueTag, MoodTag, TaskIcon, CREATIVITY } from './ui';
 
 export function TaskCard({ task, picked, compact }: { task: Task; picked?: boolean; compact?: boolean }) {
   const moods = liveMoods(useStore((s) => s.data));
@@ -45,8 +45,8 @@ export function TaskCard({ task, picked, compact }: { task: Task; picked?: boole
           {!compact && (
             <div className="row wrap" style={{ marginTop: 8, gap: 6 }}>
               {task.important && <span className="tag" style={{ background: 'var(--danger-soft)', color: 'var(--danger-text)' }}><IconFlame size={13} /> Важно</span>}
-              {task.urgent && <span className="tag" style={{ background: 'var(--warning-soft)', color: 'var(--warning-text)' }}><IconClock size={13} /> Срочно</span>}
-              {overdue && <span className="tag" style={{ background: 'var(--danger-soft)', color: 'var(--danger-text)' }}><IconAlertTriangle size={13} /> Просрочено</span>}
+              <DueTag due={task.due} />
+              {overdue && <span className="tag" style={{ background: 'var(--danger-soft)', color: 'var(--danger-text)' }}><IconAlertTriangle size={13} /> Шаг просрочен</span>}
               {moods.filter((m) => task.moods.includes(m.id)).slice(0, 2).map((m) => <MoodTag key={m.id} mood={m} />)}
               <span className="tag" style={{ background: 'var(--surface-2)', color: 'var(--text-2)' }}>{CREATIVITY[task.creativity]}</span>
               <Dots n={task.difficulty} title={`Сложность ${task.difficulty} из 3`} />

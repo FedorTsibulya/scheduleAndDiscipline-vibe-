@@ -36,7 +36,9 @@ export interface Task extends Syncable {
   difficulty: Level3;
   creativity: Level3; // 1 рутина, 2 смешанная, 3 творческая
   important: boolean;
-  urgent: boolean;
+  urgent?: boolean; // устарело: теперь срочность вычисляется из срока (due)
+  due?: string; // YYYY-MM-DD — срок выполнения
+  dueKind?: 'today' | 'days3' | 'week' | 'month' | 'date'; // какой вариант срока выбирали (для подсказки в редакторе)
   color: ColorKey;
   steps: Step[];
   completedAt?: number;
@@ -82,7 +84,13 @@ export interface Habit extends Syncable {
   tip: string; // как закрепить привычку
   anchor: string; // «после того как …» — к чему привязать
   mine: boolean; // закреплена: выполнять регулярно, видна на экране «Сейчас»
-  days?: number[]; // дни недели для закреплённой привычки (0 = пн … 6 = вс); нет — каждый день
+  // Периодичность закреплённой привычки:
+  // days — по дням недели (days: 0 = пн … 6 = вс; нет — каждый день),
+  // every — раз в everyDays дней («через день» = 2), weekly — timesPerWeek раз за неделю (пн–вс)
+  freq?: 'days' | 'every' | 'weekly';
+  days?: number[];
+  everyDays?: number;
+  timesPerWeek?: number;
   builtIn?: boolean;
 }
 

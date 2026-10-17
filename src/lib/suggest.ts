@@ -1,6 +1,7 @@
 import type { Task } from '../types';
 import { isActive, nextStep } from './progress';
 import { dayKey } from './util';
+import { daysLeft } from './deadline';
 
 // Насколько задача «просится» сейчас: важность, срочность, запланированность на сегодня,
 // просрочка, давность и совпадение с настроением.
@@ -9,7 +10,11 @@ export function scoreTask(t: Task, moodId: string | null, now = Date.now()): num
   const step = nextStep(t);
   let s = 1;
   if (t.important) s += 3;
-  if (t.urgent) s += 2;
+  if (t.due) {
+    // чем ближе срок, тем выше задача; просроченные — выше всех
+    const left = daysLeft(t.due, new Date(now));
+    s += left < 0 ? 5 : left === 0 ? 4 : left <= 3 ? 3 : left <= 7 ? 1 : 0;
+  }
   if (step?.date) {
     if (step.date === today) s += 3;
     else if (step.date < today) s += 4;

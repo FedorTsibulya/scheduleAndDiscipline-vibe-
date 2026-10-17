@@ -13,7 +13,7 @@ export function HabitsPage() {
   const [adding, setAdding] = useState(false);
   const habits = liveHabits(data);
   const pinned = habits.filter((h) => h.mine);
-  const todayList = pinnedFor(data.habits);
+  const todayList = pinnedFor(data.habits, data.habitLogs);
   const today = dayKey();
   const todayDone = todayList.filter((h) => doneOn(data.habitLogs, h.id, today)).length;
   const inCat = habits.filter((h) => cat === 'all' || h.category === cat).sort((a, b) => a.minutes - b.minutes);

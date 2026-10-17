@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { IconDice5, IconInbox, IconPlus, IconCoin, IconFlame, IconTarget, IconSnowflake, IconBatteryOff } from '@tabler/icons-react';
 import { liveMoods, liveTasks, useStore } from '../store';
 import { goTo, useUI } from '../uiStore';
@@ -34,6 +34,14 @@ export function NowPage() {
   const [rolling, setRolling] = useState<string | null>(null);
   const [quick, setQuick] = useState('');
   const rollTimer = useRef<number>();
+  const moodRow = useRef<HTMLDivElement>(null);
+
+  // выбранное настроение должно быть видно в прокручиваемой строке
+  useEffect(() => {
+    const el = moodRow.current?.querySelector<HTMLElement>('.chip.on');
+    const row = moodRow.current;
+    if (el && row && row.scrollWidth > row.clientWidth) row.scrollTo({ left: el.offsetLeft - 16, behavior: 'smooth' });
+  }, [mood]);
 
   const top = useMemo(() => suggest(tasks, mood, 3), [tasks, mood]);
   const pool = useMemo(() => candidates(tasks, mood), [tasks, mood]);
@@ -96,7 +104,8 @@ export function NowPage() {
         </div>
       </div>
 
-      <div className="row wrap" style={{ marginBottom: 6 }}>
+      {/* на телефоне — одна строка с прокруткой влево-вправо, чтобы задачи были видны сразу */}
+      <div className="mood-scroll" ref={moodRow}>
         <button className={`chip ${mood === null ? 'on' : ''}`} style={colorVars('gray')} onClick={() => setMood(null)}>Любое</button>
         {moods.map((m) => (
           <button key={m.id} className={`chip ${mood === m.id ? 'on' : ''}`} style={colorVars(m.color)} onClick={() => setMood(m.id)}>

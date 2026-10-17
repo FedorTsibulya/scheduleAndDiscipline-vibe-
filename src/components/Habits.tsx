@@ -6,10 +6,11 @@ import {
 import type { Habit, HabitCategory, HabitTier } from '../types';
 import { liveHabits, useStore } from '../store';
 import {
-  ALL_HABITS_BONUS, CATEGORIES, TIERS, WEEKDAYS, doneOn, habitPoints, habitStreak, pinnedFor, scheduleLabel, scheduledOn,
+  ALL_HABITS_BONUS, CATEGORIES, TIERS, WEEKDAYS, doneOn, everyOf, freqOf, habitPoints, habitStreak, periodInfo, pinnedFor,
+  scheduleLabel, scheduledOn, streakLabel, timesOf, type Freq,
 } from '../lib/habits';
 import { DynIcon, ICON_KEYS } from '../lib/icons';
-import { addDays, dayKey, plural, uid, weekdayShort } from '../lib/util';
+import { addDays, dayKey, uid, weekdayShort } from '../lib/util';
 import { Modal } from './Modal';
 import { Bar, Check, Seg, colorVars } from './ui';
 
@@ -24,7 +25,7 @@ function WeekDots({ habit }: { habit: Habit }) {
     <div className="row" style={{ gap: 4 }} aria-label="Последние 7 дней">
       {days.map((d) => {
         const on = doneOn(logs, habit.id, dayKey(d));
-        const planned = scheduledOn(habit, d);
+        const planned = freqOf(habit) !== 'days' || scheduledOn(habit, d);
         return (
           <span key={dayKey(d)} title={`${weekdayShort(d)}: ${on ? 'сделано' : planned ? 'не сделано' : 'не запланировано'}`}
             style={{ width: 12, height: 12, borderRadius: 4, display: 'inline-block', background: on ? 'var(--success)' : 'var(--surface-3)', opacity: on || planned ? 1 : 0.35 }} />
@@ -69,10 +70,50 @@ function DaysPicker({ days, onChange }: { days: number[] | undefined; onChange: 
   );
 }
 
+type Sched = Pick<Habit, 'freq' | 'days' | 'everyDays' | 'timesPerWeek'>;
+
+const FREQ_HINT: Record<Freq, string> = {
+  days: 'Привычка появляется в выбранные дни. Пропуск в другие дни серию не прерывает.',
+  every: 'Привычка появляется, когда с прошлого раза прошло нужное число дней. Сделали раньше — тоже засчитается.',
+  weekly: 'Привычка показывается каждый день, пока недельная норма не выполнена. Неделя — с понедельника по воскресенье.',
+};
+
+// Выбор регулярности: по дням недели, раз в N дней или N раз в неделю
+function SchedulePicker({ value, onChange }: { value: Sched; onChange: (s: Sched) => void }) {
+  const f = freqOf(value);
+  const chip = (on: boolean, label: string, onClick: () => void) => (
+    <button key={label} type="button" className={`chip ${on ? 'on' : ''}`} style={colorVars('pink')} onClick={onClick}>{label}</button>
+  );
+  return (
+    <div className="stack" style={{ gap: 10 }}>
+      <Seg<Freq> value={f} onChange={(v) => onChange({ ...value, freq: v })}
+        options={[{ v: 'days', label: 'По дням недели' }, { v: 'every', label: 'Раз в N дней' }, { v: 'weekly', label: 'N раз в неделю' }]} />
+      {f === 'days' && <DaysPicker days={value.days} onChange={(days) => onChange({ ...value, days })} />}
+      {f === 'every' && (
+        <div className="row wrap" style={{ gap: 6 }}>
+          {[2, 3, 4, 7, 14].map((n) => chip(everyOf(value) === n, n === 2 ? 'Через день' : n === 7 ? 'Раз в неделю (7 дн.)' : n === 14 ? 'Раз в 2 недели' : `Раз в ${n} дня`, () => onChange({ ...value, everyDays: n })))}
+          <span className="row small muted" style={{ gap: 6 }}>
+            или раз в
+            <input type="number" min={2} max={60} className="input" style={{ width: 70, padding: '4px 8px' }} value={everyOf(value)}
+              onChange={(e) => onChange({ ...value, everyDays: Math.max(2, Math.min(60, Math.round(+e.target.value) || 2)) })} aria-label="Раз в сколько дней" />
+            дн.
+          </span>
+        </div>
+      )}
+      {f === 'weekly' && (
+        <div className="row wrap" style={{ gap: 6 }}>
+          {[1, 2, 3, 4, 5, 6].map((n) => chip(timesOf(value) === n, n === 1 ? 'Раз в неделю' : `${n} раза`, () => onChange({ ...value, timesPerWeek: n })))}
+        </div>
+      )}
+      <p className="small faint">{FREQ_HINT[f]}</p>
+    </div>
+  );
+}
+
 // Диалог «Закрепить»: регулярность выполнения
 function PinDialog({ habit, onClose }: { habit: Habit; onClose: () => void }) {
   const save = useStore((s) => s.saveHabit);
-  const [days, setDays] = useState<number[] | undefined>(habit.days);
+  const [sched, setSched] = useState<Sched>({ freq: habit.freq, days: habit.days, everyDays: habit.everyDays, timesPerWeek: habit.timesPerWeek });
   return (
     <Modal
       title="Закрепить привычку"
@@ -82,19 +123,19 @@ function PinDialog({ habit, onClose }: { habit: Habit; onClose: () => void }) {
           {habit.mine ? (
             <button className="btn danger" onClick={() => { save({ ...habit, mine: false }); onClose(); }}><IconPinnedOff size={16} /> Открепить</button>
           ) : <span />}
-          <button className="btn primary" onClick={() => { save({ ...habit, mine: true, days }); onClose(); }}><IconPin size={16} /> {habit.mine ? 'Сохранить' : 'Закрепить'}</button>
+          <button className="btn primary" onClick={() => { save({ ...habit, mine: true, ...sched }); onClose(); }}><IconPin size={16} /> {habit.mine ? 'Сохранить' : 'Закрепить'}</button>
         </>
       }
     >
       <div className="stack" style={{ gap: 14 }}>
         <p style={{ fontWeight: 800 }}>{habit.title}</p>
         <p className="small muted">
-          Закреплённая привычка каждый день появляется на экране «Сейчас» в списке «Привычки на сегодня». У неё считается своя серия:
-          пропуск в незапланированный день серию не прерывает. Если выполнить все закреплённые привычки дня — бонус +{ALL_HABITS_BONUS}.
+          Закреплённая привычка появляется на экране «Сейчас» в списке «Привычки на сегодня» в те дни, когда её пора делать.
+          У неё считается своя серия. Если выполнить все привычки дня — бонус +{ALL_HABITS_BONUS}.
         </p>
         <div className="field">
-          <span className="label-text">Когда выполнять</span>
-          <DaysPicker days={days} onChange={setDays} />
+          <span className="label-text">Как часто выполнять</span>
+          <SchedulePicker value={sched} onChange={setSched} />
         </div>
         {habit.anchor && (
           <p className="small row" style={{ alignItems: 'flex-start', gap: 6 }}>
@@ -147,7 +188,9 @@ export function HabitCard({ habit, compact }: { habit: Habit; compact?: boolean 
           <WeekDots habit={habit} />
         </div>
       )}
-      {streak > 1 && <span className="small" style={{ color: 'var(--accent)', fontWeight: 800 }}><IconFlame size={13} /> {streak} {plural(streak, 'раз', 'раза', 'раз')} подряд</span>}
+      {(streak > 1 || (streak === 1 && habit.mine && freqOf(habit) === 'weekly')) && (
+        <span className="small" style={{ color: 'var(--accent)', fontWeight: 800 }}><IconFlame size={13} /> {streakLabel(habit, streak)}</span>
+      )}
 
       {open && (
         <div className="stack small" style={{ gap: 6, background: 'var(--surface-2)', borderRadius: 12, padding: '10px 12px' }}>
@@ -228,7 +271,7 @@ export function HabitEditor({ habit, onClose }: { habit: Habit; onClose: () => v
             <span className="track" />
             <span>Закрепить — выполнять регулярно</span>
           </label>
-          {h.mine && <div style={{ marginTop: 6 }}><DaysPicker days={h.days} onChange={(days) => p({ days })} /></div>}
+          {h.mine && <div style={{ marginTop: 6 }}><SchedulePicker value={h} onChange={(s) => p(s)} /></div>}
         </div>
         <div className="field">
           <label htmlFor="h-anchor">Якорь: после чего вы будете это делать</label>
@@ -299,7 +342,7 @@ export function PinnedToday({ onOpenAll }: { onOpenAll?: () => void }) {
   const data = useStore((s) => s.data);
   const toggle = useStore((s) => s.toggleHabit);
   const today = dayKey();
-  const list = pinnedFor(data.habits);
+  const list = pinnedFor(data.habits, data.habitLogs);
   if (!list.length) return null;
   const done = list.filter((x) => doneOn(data.habitLogs, x.id, today)).length;
   const sorted = [...list].sort((a, b) => Number(doneOn(data.habitLogs, a.id, today)) - Number(doneOn(data.habitLogs, b.id, today)));
@@ -322,7 +365,11 @@ export function PinnedToday({ onOpenAll }: { onOpenAll?: () => void }) {
               <span className="tint-sub" style={{ ...colorVars(cat.color), display: 'inline-flex' }}><DynIcon name={x.icon} size={18} /></span>
               <div className="grow">
                 <p className="step-title" style={{ fontWeight: 700 }}>{x.title}</p>
-                <p className="small faint">{x.minutes} мин{streak > 1 ? ` · ${streak} подряд` : ''}{x.anchor ? ` · ${x.anchor.charAt(0).toLowerCase() + x.anchor.slice(1)}` : ''}</p>
+                <p className="small faint">
+                  {x.minutes} мин · {scheduleLabel(x)}
+                  {periodInfo(x, data.habitLogs) ? ` (${periodInfo(x, data.habitLogs)})` : ''}
+                  {streak > 1 ? ` · ${streakLabel(x, streak)}` : ''}
+                </p>
               </div>
               <span className="pill gold" style={{ fontSize: 12, padding: '2px 9px' }}>+{habitPoints(x)}</span>
             </div>

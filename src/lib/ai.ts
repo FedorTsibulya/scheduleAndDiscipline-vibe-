@@ -3,6 +3,7 @@ import type { AppData, Level3, Mood, Task } from '../types';
 import { isActive, nextStep, remainingMinutes, taskProgress } from './progress';
 import { activeDays, computeStreak } from './game';
 import { dayKey } from './util';
+import { dueStatus } from './deadline';
 
 // Настройки Claude хранятся только на этом устройстве и не синхронизируются
 export interface AiConfig {
@@ -93,7 +94,7 @@ function describeTask(t: Task, moods: Mood[], today: string) {
     minutesLeft: remainingMinutes(t),
     progressPercent: Math.round(taskProgress(t) * 100),
     important: t.important,
-    urgent: t.urgent,
+    deadline: t.due ? dueStatus(t.due).label : null,
     difficulty: ['', 'лёгкая', 'средняя', 'сложная'][t.difficulty],
     creativity: ['', 'рутина', 'смешанная', 'творческая'][t.creativity],
     moods: moodNames(t.moods, moods),
@@ -130,7 +131,7 @@ export async function suggestByFeeling(cfg: AiConfig, data: AppData, feeling: st
 Активные задачи (JSON):
 ${JSON.stringify(tasks)}
 
-Выбери 1–3 задачи, которые лучше всего подходят под это состояние прямо сейчас. Учитывай энергию и настроение, доступное время, если оно названо, важность, срочность и просрочку. Если человек устал или тревожен, предпочитай короткие и лёгкие шаги, а сложное оставь на потом.
+Выбери 1–3 задачи, которые лучше всего подходят под это состояние прямо сейчас. Учитывай энергию и настроение, доступное время, если оно названо, важность, сроки (deadline) и просрочку. Если человек устал или тревожен, предпочитай короткие и лёгкие шаги, а сложное оставь на потом.
 Для каждой задачи:
 - why — одно-два предложения, почему она подходит именно сейчас;
 - firstAction — самое маленькое конкретное первое действие на 2–5 минут;
@@ -190,7 +191,7 @@ export interface Assessment {
   difficulty: Level3;
   creativity: Level3;
   important: boolean;
-  urgent: boolean;
+  deadline: 'none' | 'today' | 'days3' | 'week' | 'month';
   reason: string;
 }
 
@@ -204,18 +205,18 @@ ${notes.trim() ? `Заметки: ${notes.trim().slice(0, 1000)}\n` : ''}${steps
 - difficulty — 1 лёгкая, 2 средняя, 3 сложная (по усилию и концентрации);
 - creativity — 1 рутина, 2 смешанная, 3 творческая;
 - important — влияет ли на здоровье, деньги, работу, близких или долгосрочные цели;
-- urgent — есть ли явный или вероятный срок в ближайшие дни;
+- deadline — срок, если он явно следует из задачи: today (сегодня), days3 (2–3 дня), week (неделя), month (до конца месяца); если срока не видно — none;
 - reason — одна короткая фраза, почему так.`;
-  const res = await ask<{ moodIds: string[]; difficulty: number; creativity: number; important: boolean; urgent: boolean; reason: string }>(cfg, prompt, {
+  const res = await ask<Omit<Assessment, 'difficulty' | 'creativity'> & { difficulty: number; creativity: number }>(cfg, prompt, {
     type: 'object',
     additionalProperties: false,
-    required: ['moodIds', 'difficulty', 'creativity', 'important', 'urgent', 'reason'],
+    required: ['moodIds', 'difficulty', 'creativity', 'important', 'deadline', 'reason'],
     properties: {
       moodIds: { type: 'array', items: str },
       difficulty: { type: 'integer', enum: [1, 2, 3] },
       creativity: { type: 'integer', enum: [1, 2, 3] },
       important: { type: 'boolean' },
-      urgent: { type: 'boolean' },
+      deadline: { type: 'string', enum: ['none', 'today', 'days3', 'week', 'month'] },
       reason: str,
     },
   }, 'low');

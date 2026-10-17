@@ -9,13 +9,15 @@ import { ALL_HABITS_BONUS, habitPoints, pinnedFor, upgradeBuiltinHabits } from '
 import { isComplete } from './lib/progress';
 import { ACHIEVEMENTS, buildCtx } from './lib/achievements';
 import type { AiConfig, WeeklyReview } from './lib/ai';
+import { buildMerged, planReopen, type MergeMode } from './lib/taskOps';
+import { dueFromKind } from './lib/deadline';
 import { ACHIEVEMENT_BONUS, TASK_BONUS, focusPoints, levelInfo, stepPoints, totalXp } from './lib/game';
 
 // ---------- праздники (не сохраняются) ----------
 
 export type Celebration =
   | { id: string; type: 'step'; points: number; postponed: number }
-  | { id: string; type: 'task'; title: string; points: number }
+  | { id: string; type: 'task'; title: string; points: number; taskId: string }
   | { id: string; type: 'achievement'; achievementId: string }
   | { id: string; type: 'level'; level: number }
   | { id: string; type: 'focus'; points: number; minutes: number }
@@ -26,7 +28,7 @@ type CelebrationInput =
   | { type: 'habit'; points: number; title: string }
   | { type: 'allHabits'; points: number; count: number }
   | { type: 'step'; points: number; postponed: number }
-  | { type: 'task'; title: string; points: number }
+  | { type: 'task'; title: string; points: number; taskId: string }
   | { type: 'achievement'; achievementId: string }
   | { type: 'level'; level: number }
   | { type: 'focus'; points: number; minutes: number };
@@ -50,6 +52,7 @@ interface State {
   toggleStep: (taskId: string, stepId: string) => void;
   completeTask: (taskId: string) => void;
   reopenTask: (taskId: string) => void;
+  mergeTasks: (ids: string[], mode: MergeMode, keepSubsteps: boolean) => string | null;
   scheduleStep: (taskId: string, stepId: string, date: string | undefined) => void;
 
   // простые дела и привычки
@@ -156,7 +159,7 @@ export const useStore = create<State>()(
               ...d.tasks,
               {
                 id: uid(), updatedAt: now(), createdAt: now(), title: title.trim(), notes: '', inbox: true,
-                moods: [], difficulty: 2, creativity: 2, important: false, urgent: false, color: 'purple', steps: [],
+                moods: [], difficulty: 2, creativity: 2, important: false, color: 'purple', steps: [],
               },
             ],
           })),
@@ -188,7 +191,7 @@ export const useStore = create<State>()(
               if (!task.completedAt && isComplete(updated)) {
                 updated = { ...updated, completedAt: now() };
                 events.push(pointsEvent('task', TASK_BONUS, `Задача завершена: ${task.title}`, { taskId }));
-                cel.push({ type: 'task', title: task.title, points: pts.amount + TASK_BONUS });
+                cel.push({ type: 'task', title: task.title, points: pts.amount + TASK_BONUS, taskId });
               } else {
                 cel.push({ type: 'step', points: pts.amount, postponed: pts.postponed });
               }
@@ -226,17 +229,42 @@ export const useStore = create<State>()(
                 pointsEvent('task', TASK_BONUS, `Задача завершена: ${task.title}`, { taskId }),
               ],
             }),
-            [{ type: 'task', title: task.title, points: pts + TASK_BONUS }],
+            [{ type: 'task', title: task.title, points: pts + TASK_BONUS, taskId }],
           );
         },
 
-        reopenTask: (taskId) =>
+        // Вернуть завершённую задачу в работу: откатываются шаги, закрытые в момент завершения,
+        // и снимаются очки за них и за саму задачу
+        reopenTask: (taskId) => {
+          const task = get().data.tasks.find((t) => t.id === taskId);
+          if (!task?.completedAt) return;
+          const plan = planReopen(task, get().data.points);
+          const undo = new Set(plan.stepIds);
+          const drop = new Set(plan.pointIds);
+          set((s) => ({ celebrations: s.celebrations.filter((c) => !(c.type === 'task' && c.taskId === taskId)) }));
           commit((d) => ({
-            ...mapTask(d, taskId, (t) => ({ ...t, completedAt: undefined })),
-            points: d.points.map((p) =>
-              !p.deleted && p.taskId === taskId && p.kind === 'task' ? { ...p, deleted: true, updatedAt: now() } : p,
-            ),
-          })),
+            ...mapTask(d, taskId, (t) => ({
+              ...t,
+              completedAt: undefined,
+              steps: t.steps.map((s) => (undo.has(s.id) ? { ...s, done: false, doneAt: undefined } : s)),
+            })),
+            points: d.points.map((p) => (drop.has(p.id) ? { ...p, deleted: true, updatedAt: now() } : p)),
+          }));
+        },
+
+        // Объединить несколько задач в одну большую: маленькие становятся её шагами
+        mergeTasks: (ids, mode, keepSubsteps) => {
+          const sources = get().data.tasks.filter((t) => ids.includes(t.id) && !t.deleted);
+          if (sources.length < 2) return null;
+          const merged = buildMerged(sources, mode, keepSubsteps);
+          commit((d) => {
+            const removed = new Set(sources.filter((t) => t.id !== merged.id).map((t) => t.id));
+            const tasks = d.tasks.map((t) => (removed.has(t.id) ? { ...t, deleted: true, updatedAt: now() } : t));
+            const exists = tasks.some((t) => t.id === merged.id);
+            return { ...d, tasks: exists ? tasks.map((t) => (t.id === merged.id ? merged : t)) : [...tasks, merged] };
+          });
+          return merged.id;
+        },
 
         scheduleStep: (taskId, stepId, date) =>
           commit((d) => mapTask(d, taskId, (t) => ({ ...t, steps: t.steps.map((s) => (s.id === stepId ? { ...s, date } : s)) }))),
@@ -266,7 +294,7 @@ export const useStore = create<State>()(
           const pts = habitPoints(habit);
           const label = (habit.tier ?? 'easy') === 'hard' ? 'Дело' : 'Простое дело';
           // все ли закреплённые на сегодня привычки будут сделаны после этой отметки
-          const pinned = pinnedFor(d0.habits);
+          const pinned = pinnedFor(d0.habits, d0.habitLogs);
           const allDone =
             pinned.length > 1 && pinned.some((x) => x.id === habitId) &&
             pinned.every((x) => x.id === habitId || d0.habitLogs.some((l) => !l.deleted && l.habitId === x.id && l.day === today)) &&
@@ -382,11 +410,20 @@ export const useStore = create<State>()(
     },
     {
       name: 'focus-quest',
-      version: 3,
-      // v2: пул простых дел и привычек; v3: дела посерьёзнее, расписание, обновлённый встроенный пул
+      version: 4,
+      // v2: пул простых дел и привычек; v3: дела посерьёзнее, расписание, обновлённый встроенный пул;
+      // v4: «срочно» заменено сроками — старые срочные задачи получают срок «2–3 дня»
       migrate: (persisted, version) => {
         const s = persisted as { data?: AppData };
         if (version < 3 && s.data) s.data = upgradeBuiltinHabits(s.data);
+        if (version < 4 && s.data) {
+          s.data = {
+            ...s.data,
+            tasks: s.data.tasks.map((t) =>
+              t.urgent && !t.due ? { ...t, urgent: undefined, due: dueFromKind('days3'), dueKind: 'days3' as const, updatedAt: Date.now() } : t,
+            ),
+          };
+        }
         return s as State;
       },
       // ключ Claude и токен GitHub остаются только в этом браузере: в файл синхронизации они не попадают

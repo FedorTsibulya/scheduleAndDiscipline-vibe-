@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { IconCheck } from '@tabler/icons-react';
+import { IconCheck, IconClock, IconAlertTriangle } from '@tabler/icons-react';
+import { DUE_COLORS, dueStatus } from '../lib/deadline';
 import type { ColorKey, Level3, Mood } from '../types';
 import { PALETTE } from '../lib/colors';
 import { DynIcon } from '../lib/icons';
@@ -71,6 +72,19 @@ export function TaskIcon({ color, children }: { color: ColorKey; children: React
     <div className="task-icon tint strong" style={colorVars(color)}>
       {children}
     </div>
+  );
+}
+
+// Метка срока: «Срок сегодня», «Через 2 дня», «Просрочено на 3 дня» — пересчитывается каждый день
+export function DueTag({ due }: { due?: string }) {
+  if (!due) return null;
+  const st = dueStatus(due);
+  const c = DUE_COLORS[st.level];
+  const Icon = st.level === 'overdue' ? IconAlertTriangle : IconClock;
+  return (
+    <span className="tag" style={{ background: c.bg, color: c.fg }} title={`Срок: ${due}`}>
+      <Icon size={13} /> {st.label}
+    </span>
   );
 }
 

@@ -1,5 +1,5 @@
 import type { AppData, ColorKey, Habit, HabitCategory, HabitLog, HabitTier } from '../types';
-import { addDays, dayKey } from './util';
+import { addDays, dayKey, parseDay } from './util';
 
 // Награда: простое дело +5; дело посерьёзнее +15, а от 30 минут +20
 export const habitPoints = (h: Pick<Habit, 'tier' | 'minutes'>) =>
@@ -29,16 +29,75 @@ export const TIERS: Record<HabitTier, { label: string; hint: string }> = {
 export const WEEKDAYS = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
 export const weekdayIndex = (d: Date) => (d.getDay() + 6) % 7;
 
-// Запланирована ли закреплённая привычка на этот день
-export const scheduledOn = (h: Habit, d: Date) => !h.days || h.days.length === 0 || h.days.includes(weekdayIndex(d));
+export type Freq = 'days' | 'every' | 'weekly';
+export const freqOf = (h: Pick<Habit, 'freq'>): Freq => h.freq ?? 'days';
+export const everyOf = (h: Pick<Habit, 'everyDays'>) => Math.max(2, h.everyDays ?? 2);
+export const timesOf = (h: Pick<Habit, 'timesPerWeek'>) => Math.min(6, Math.max(1, h.timesPerWeek ?? 1));
 
-export const scheduleLabel = (h: Habit) => {
+// Для режима «по дням недели»: запланирована ли привычка на этот день.
+// В гибких режимах конкретных дней нет — любой день подходит.
+export const scheduledOn = (h: Habit, d: Date) =>
+  freqOf(h) !== 'days' || !h.days || h.days.length === 0 || h.days.includes(weekdayIndex(d));
+
+export const scheduleLabel = (h: Pick<Habit, 'freq' | 'days' | 'everyDays' | 'timesPerWeek'>) => {
+  const f = freqOf(h);
+  if (f === 'every') {
+    const n = everyOf(h);
+    return n === 2 ? 'через день' : `раз в ${n} ${n < 5 ? 'дня' : 'дней'}`;
+  }
+  if (f === 'weekly') {
+    const n = timesOf(h);
+    return n === 1 ? 'раз в неделю' : `${n} раза в неделю`;
+  }
   if (!h.days || h.days.length === 0 || h.days.length === 7) return 'каждый день';
   const s = [...h.days].sort().join(',');
   if (s === '0,1,2,3,4') return 'по будням';
   if (s === '5,6') return 'по выходным';
   return [...h.days].sort().map((i) => WEEKDAYS[i]).join(', ');
 };
+
+const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const daysBetween = (a: string, b: Date) => Math.round((startOfDay(b).getTime() - parseDay(a).getTime()) / 86400000);
+const weekStart = (d: Date) => addDays(startOfDay(d), -weekdayIndex(d));
+
+const doneDays = (logs: HabitLog[], habitId: string) =>
+  [...new Set(logs.filter((l) => !l.deleted && l.habitId === habitId).map((l) => l.day))].sort();
+
+// Сколько раз сделано на неделе, в которую входит день d
+const doneInWeek = (days: string[], d: Date) => {
+  const from = dayKey(weekStart(d));
+  const to = dayKey(addDays(weekStart(d), 6));
+  return days.filter((k) => k >= from && k <= to).length;
+};
+
+// Нужно ли делать закреплённую привычку в этот день (сделанная сегодня тоже показывается — уже отмеченной)
+export function isDueOn(h: Habit, logs: HabitLog[], d = new Date()): boolean {
+  const today = dayKey(d);
+  const days = doneDays(logs, h.id);
+  if (days.includes(today)) return true;
+  const f = freqOf(h);
+  if (f === 'days') return scheduledOn(h, d);
+  if (f === 'every') {
+    const last = days.filter((k) => k < today).pop();
+    return !last || daysBetween(last, d) >= everyOf(h);
+  }
+  return doneInWeek(days, d) < timesOf(h);
+}
+
+// Подсказка о периоде: «на этой неделе 1 из 2», «следующий раз через 2 дня»
+export function periodInfo(h: Habit, logs: HabitLog[], d = new Date()): string | null {
+  const f = freqOf(h);
+  const days = doneDays(logs, h.id);
+  if (f === 'weekly') return `на этой неделе ${Math.min(doneInWeek(days, d), timesOf(h))} из ${timesOf(h)}`;
+  if (f === 'every') {
+    const last = days.filter((k) => k <= dayKey(d)).pop();
+    if (!last) return 'можно сегодня';
+    const left = everyOf(h) - daysBetween(last, d);
+    if (left <= 0) return 'пора сегодня';
+    return left === 1 ? 'следующий раз завтра' : `следующий раз через ${left} ${left < 5 ? 'дня' : 'дней'}`;
+  }
+  return null;
+}
 
 // Версия встроенного пула. Записи с меньшим updatedAt, которые пользователь не трогал, обновляются.
 // Одинаковая константа на всех устройствах — синхронизация сходится к одной версии.
@@ -225,19 +284,51 @@ const live = (logs: HabitLog[]) => logs.filter((l) => !l.deleted);
 export const doneOn = (logs: HabitLog[], habitId: string, day: string) =>
   live(logs).some((l) => l.habitId === habitId && l.day === day);
 
-// Серия для одной привычки: у закреплённой считаются только запланированные дни (закреплённую
-// по будням выходные не прерывают). Сегодня ещё можно успеть — несделанное сегодня не обнуляет серию.
-export function habitStreak(logs: HabitLog[], habit: Habit, now = new Date()) {
-  const days = new Set(live(logs).filter((l) => l.habitId === habit.id).map((l) => l.day));
-  let d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  if (!days.has(dayKey(d))) d = addDays(d, -1);
-  let n = 0;
+// Серия одной привычки — сколько раз подряд она выполнена «в срок».
+// По дням недели: незапланированные дни серию не прерывают. «Раз в N дней»: между выполнениями
+// не больше N дней. «N раз в неделю»: считаются недели, в которых норма выполнена.
+// Текущий день/период ещё не закончен — его невыполнение серию не обнуляет.
+export function habitStreak(logs: HabitLog[], habit: Habit, now = new Date()): number {
+  const days = doneDays(logs, habit.id);
+  const today = startOfDay(now);
+  const f = habit.mine ? freqOf(habit) : 'days';
+
+  if (f === 'every') {
+    const n = everyOf(habit);
+    const rev = [...days].reverse();
+    if (!rev.length || daysBetween(rev[0], today) > n) return 0;
+    let count = 1;
+    for (let i = 1; i < rev.length && daysBetween(rev[i], parseDay(rev[i - 1])) <= n; i++) count++;
+    return count;
+  }
+
+  if (f === 'weekly') {
+    const need = timesOf(habit);
+    let w = weekStart(today);
+    let count = 0;
+    if (doneInWeek(days, w) >= need) count++;
+    for (let i = 0; i < 260; i++) {
+      w = addDays(w, -7);
+      if (doneInWeek(days, w) >= need) count++;
+      else break;
+    }
+    return count;
+  }
+
+  const set = new Set(days);
+  let d = set.has(dayKey(today)) ? today : addDays(today, -1);
+  let count = 0;
   for (let i = 0; i < 730; i++, d = addDays(d, -1)) {
-    if (days.has(dayKey(d))) n++;
+    if (set.has(dayKey(d))) count++;
     else if (!habit.mine || scheduledOn(habit, d)) break;
   }
-  return n;
+  return count;
 }
+
+export const streakLabel = (h: Habit, n: number) =>
+  h.mine && freqOf(h) === 'weekly'
+    ? `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'неделя' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'недели' : 'недель'} подряд`
+    : `${n} ${[2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'раза' : 'раз'} подряд`;
 
 // Лучшая серия среди всех привычек (для достижений)
 export function bestHabitStreak(data: Pick<AppData, 'habits' | 'habitLogs'>) {
@@ -245,12 +336,29 @@ export function bestHabitStreak(data: Pick<AppData, 'habits' | 'habitLogs'>) {
   const today = dayKey();
   let best = 0;
   for (const habit of data.habits) {
-    const days = [...new Set(logs.filter((l) => l.habitId === habit.id).map((l) => l.day))].sort();
+    const days = doneDays(logs, habit.id);
     if (!days.length) continue;
+    const f = habit.mine ? freqOf(habit) : 'days';
+    if (f === 'every') {
+      let run = 1;
+      best = Math.max(best, 1);
+      for (let i = 1; i < days.length; i++) {
+        run = daysBetween(days[i - 1], parseDay(days[i])) <= everyOf(habit) ? run + 1 : 1;
+        best = Math.max(best, run);
+      }
+      continue;
+    }
+    if (f === 'weekly') {
+      let run = 0;
+      for (let w = weekStart(parseDay(days[0])); dayKey(w) <= today; w = addDays(w, 7)) {
+        if (doneInWeek(days, w) >= timesOf(habit)) best = Math.max(best, ++run);
+        else if (dayKey(addDays(w, 6)) < today) run = 0;
+      }
+      continue;
+    }
     const set = new Set(days);
-    const [y, m, dd] = days[0].split('-').map(Number);
     let run = 0;
-    for (let d = new Date(y, m - 1, dd); dayKey(d) <= today; d = addDays(d, 1)) {
+    for (let d = parseDay(days[0]); dayKey(d) <= today; d = addDays(d, 1)) {
       const k = dayKey(d);
       if (set.has(k)) best = Math.max(best, ++run);
       else if (k !== today && (!habit.mine || scheduledOn(habit, d))) run = 0;
@@ -259,5 +367,6 @@ export function bestHabitStreak(data: Pick<AppData, 'habits' | 'habitLogs'>) {
   return best;
 }
 
-// Закреплённые привычки, запланированные на этот день
-export const pinnedFor = (habits: Habit[], d = new Date()) => habits.filter((x) => !x.deleted && x.mine && scheduledOn(x, d));
+// Закреплённые привычки, которые нужно сделать в этот день
+export const pinnedFor = (habits: Habit[], logs: HabitLog[], d = new Date()) =>
+  habits.filter((x) => !x.deleted && x.mine && isDueOn(x, logs, d));

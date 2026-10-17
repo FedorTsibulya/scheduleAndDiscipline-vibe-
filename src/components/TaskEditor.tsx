@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { IconPlus, IconTrash, IconBulb, IconArrowUp, IconArrowDown, IconSparkles, IconLoader2, IconAlertTriangle } from '@tabler/icons-react';
+import { IconPlus, IconTrash, IconBulb, IconArrowUp, IconArrowDown, IconSparkles, IconLoader2, IconAlertTriangle, IconRotate } from '@tabler/icons-react';
 import { AiError, aiConfigured, assessTask, breakdownTask } from '../lib/ai';
+import { DEADLINE_OPTIONS, DUE_COLORS, dueFromKind, dueStatus } from '../lib/deadline';
+import { ReopenDialog } from './TaskDialogs';
 import type { Level3, Step, Task } from '../types';
 import { liveMoods, useStore } from '../store';
 import { Modal } from './Modal';
@@ -11,7 +13,7 @@ import { uid } from '../lib/util';
 
 export const newTask = (): Task => ({
   id: uid(), updatedAt: Date.now(), createdAt: Date.now(), title: '', notes: '', inbox: false, moods: [],
-  difficulty: 2, creativity: 2, important: false, urgent: false, color: 'purple', steps: [],
+  difficulty: 2, creativity: 2, important: false, color: 'purple', steps: [],
 });
 
 const MINUTES = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
@@ -27,6 +29,7 @@ export function TaskEditor({ task, onClose }: { task: Task; onClose: () => void 
   const [error, setError] = useState('');
   const isNew = !useStore.getState().data.tasks.some((x) => x.id === task.id);
   const ai = useStore((s) => s.ai);
+  const [reopening, setReopening] = useState(false);
   const [aiBusy, setAiBusy] = useState<'steps' | 'assess' | null>(null);
   const [aiMsg, setAiMsg] = useState<{ kind: 'steps' | 'assess'; text: string; error?: boolean } | null>(null);
 
@@ -55,7 +58,11 @@ export function TaskEditor({ task, onClose }: { task: Task; onClose: () => void 
     setAiMsg(null);
     try {
       const a = await assessTask(ai, t.title, t.notes, t.steps.map((s) => s.title), moods);
-      patch({ moods: a.moodIds, difficulty: a.difficulty, creativity: a.creativity, important: a.important, urgent: a.urgent });
+      patch({
+        moods: a.moodIds, difficulty: a.difficulty, creativity: a.creativity, important: a.important,
+        // срок от Claude ставим, только если пользователь его ещё не задал
+        ...(!t.due && a.deadline !== 'none' ? { due: dueFromKind(a.deadline), dueKind: a.deadline } : {}),
+      });
       setAiMsg({ kind: 'assess', text: a.reason });
     } catch (e) {
       setAiMsg({ kind: 'assess', text: e instanceof AiError ? e.message : 'Не получилось. Попробуйте ещё раз.', error: true });
@@ -119,9 +126,14 @@ export function TaskEditor({ task, onClose }: { task: Task; onClose: () => void 
       footer={
         <>
           {!isNew ? (
-            <button className="btn danger" onClick={() => { deleteTask(t.id); onClose(); }}>
-              <IconTrash size={16} /> Удалить
-            </button>
+            <div className="row wrap">
+              <button className="btn danger" onClick={() => { deleteTask(t.id); onClose(); }}>
+                <IconTrash size={16} /> Удалить
+              </button>
+              {task.completedAt && (
+                <button className="btn" onClick={() => setReopening(true)}><IconRotate size={16} /> Вернуть в работу</button>
+              )}
+            </div>
           ) : <span />}
           <div className="row">
             <button className="btn ghost" onClick={onClose}>Отмена</button>
@@ -220,9 +232,29 @@ export function TaskEditor({ task, onClose }: { task: Task; onClose: () => void 
           </div>
         </div>
 
-        <div className="row wrap" style={{ gap: 22 }}>
-          <Switch checked={t.important} onChange={(v) => patch({ important: v })} label="Важная" />
-          <Switch checked={t.urgent} onChange={(v) => patch({ urgent: v })} label="Срочная" />
+        <Switch checked={t.important} onChange={(v) => patch({ important: v })} label="Важная" />
+
+        <div className="field">
+          <span className="label-text">Срок</span>
+          <div className="row wrap" style={{ gap: 6 }}>
+            <button type="button" className={`chip ${!t.due ? 'on' : ''}`} style={colorVars('gray')} onClick={() => patch({ due: undefined, dueKind: undefined })}>Без срока</button>
+            {DEADLINE_OPTIONS.map((o) => (
+              <button key={o.kind} type="button" className={`chip ${t.dueKind === o.kind && t.due ? 'on' : ''}`} style={colorVars('coral')}
+                onClick={() => patch({ dueKind: o.kind, due: o.kind === 'date' ? t.due ?? dueFromKind('week') : dueFromKind(o.kind) })}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+          {t.due && (
+            <div className="row wrap" style={{ gap: 10, marginTop: 4 }}>
+              <input type="date" className="input" style={{ width: 170 }} value={t.due} aria-label="Дата срока"
+                onChange={(e) => e.target.value && patch({ due: e.target.value, dueKind: 'date' })} />
+              <span className="tag" style={{ background: DUE_COLORS[dueStatus(t.due).level].bg, color: DUE_COLORS[dueStatus(t.due).level].fg }}>
+                {dueStatus(t.due).label}
+              </span>
+            </div>
+          )}
+          <span className="small faint">Срок отсчитывается от сегодняшнего дня. Чем ближе он, тем выше задача в подборке; за 3 дня до срока она считается срочной.</span>
         </div>
 
         <div className="field">
@@ -240,6 +272,7 @@ export function TaskEditor({ task, onClose }: { task: Task; onClose: () => void 
           <textarea id="t-notes" className="textarea" value={t.notes} onChange={(e) => patch({ notes: e.target.value })} placeholder="Ссылки, детали, с чего начать" />
         </div>
       </div>
+      {reopening && <ReopenDialog task={task} onClose={() => { setReopening(false); onClose(); }} />}
     </Modal>
   );
 }

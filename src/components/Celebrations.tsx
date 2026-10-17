@@ -43,21 +43,25 @@ function Cheer({ c }: { c: Extract<Celebration, { type: 'step' | 'focus' | 'habi
 // Большая плашка: задача завершена, новое достижение, новый уровень
 function Trophy({ c }: { c: Extract<Celebration, { type: 'task' | 'achievement' | 'level' | 'allHabits' }> }) {
   const dismiss = useStore((s) => s.dismissCelebration);
+  const reopen = useStore((s) => s.reopenTask);
   const sound = useStore((s) => s.data.settings.sound);
   useEffect(() => {
     burst(true);
     if (sound) playChime();
-    const id = setTimeout(() => dismiss(c.id), 5000);
+    // у завершённой задачи плашка висит дольше — чтобы успеть нажать «вернуть»
+    const id = setTimeout(() => dismiss(c.id), c.type === 'task' ? 9000 : 5000);
     return () => clearTimeout(id);
-  }, [c.id, dismiss, sound]);
+  }, [c.id, c.type, dismiss, sound]);
 
   let cls = '';
+  let undo: (() => void) | null = null;
   let icon = <IconTrophy size={34} />;
   let title = '';
   let sub = '';
   if (c.type === 'task') {
     title = `Задача завершена · +${c.points} ${plural(c.points, 'очко', 'очка', 'очков')}`;
     sub = c.title;
+    undo = () => reopen(c.taskId);
   } else if (c.type === 'allHabits') {
     icon = <IconSun size={34} />;
     title = `Все привычки дня выполнены! +${c.points}`;
@@ -82,7 +86,15 @@ function Trophy({ c }: { c: Extract<Celebration, { type: 'task' | 'achievement' 
         <div>
           <h3>{title}</h3>
           <p style={{ marginTop: 4, fontWeight: 600 }}>{sub}</p>
-          <p className="small" style={{ marginTop: 6, opacity: 0.8 }}>Нажмите, чтобы продолжить</p>
+          <div className="row wrap" style={{ marginTop: 6, gap: 10 }}>
+            <p className="small" style={{ opacity: 0.8 }}>Нажмите, чтобы продолжить</p>
+            {undo && (
+              <button className="btn sm ghost" style={{ color: 'inherit', textDecoration: 'underline', padding: '2px 4px' }}
+                onClick={(e) => { e.stopPropagation(); undo?.(); dismiss(c.id); }}>
+                Это случайно — вернуть
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

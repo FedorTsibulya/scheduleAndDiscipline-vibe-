@@ -374,6 +374,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
 :root[data-theme='dark'] .tint-sub { color: var(--c-200); }
 :root[data-theme='dark'] .chip.on { background: color-mix(in srgb, var(--c-800) 55%, var(--surface)); color: var(--c-50); border-color: var(--c-400); }
 
+/* Строка выбора настроения: на компьютере переносится, на телефоне прокручивается вбок */
+.mood-scroll { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+@media (max-width: 760px) {
+  .mood-scroll {
+    flex-wrap: nowrap; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none;
+    margin: 0 -14px 6px; padding: 2px 14px 6px; -webkit-overflow-scrolling: touch;
+    mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 28px), transparent 100%);
+  }
+  .mood-scroll::-webkit-scrollbar { display: none; }
+  .mood-scroll .chip { flex-shrink: 0; white-space: nowrap; scroll-snap-align: start; }
+}
+
 .mobile-only { display: none; }
 @media (max-width: 760px) {
   .mobile-only { display: inline-flex; }
