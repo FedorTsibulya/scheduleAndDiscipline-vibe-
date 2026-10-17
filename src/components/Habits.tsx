@@ -12,7 +12,7 @@ import {
 import { DynIcon, ICON_KEYS } from '../lib/icons';
 import { addDays, dayKey, uid, weekdayShort } from '../lib/util';
 import { Modal } from './Modal';
-import { Bar, Check, Seg, colorVars } from './ui';
+import { Bar, Check, Seg, Switch, colorVars } from './ui';
 
 const tierOf = (h: Habit): HabitTier => h.tier ?? 'easy';
 
@@ -114,6 +114,7 @@ function SchedulePicker({ value, onChange }: { value: Sched; onChange: (s: Sched
 function PinDialog({ habit, onClose }: { habit: Habit; onClose: () => void }) {
   const save = useStore((s) => s.saveHabit);
   const [sched, setSched] = useState<Sched>({ freq: habit.freq, days: habit.days, everyDays: habit.everyDays, timesPerWeek: habit.timesPerWeek });
+  const [inCalendar, setInCalendar] = useState(!!habit.inCalendar);
   return (
     <Modal
       title="Закрепить привычку"
@@ -123,7 +124,7 @@ function PinDialog({ habit, onClose }: { habit: Habit; onClose: () => void }) {
           {habit.mine ? (
             <button className="btn danger" onClick={() => { save({ ...habit, mine: false }); onClose(); }}><IconPinnedOff size={16} /> Открепить</button>
           ) : <span />}
-          <button className="btn primary" onClick={() => { save({ ...habit, mine: true, ...sched }); onClose(); }}><IconPin size={16} /> {habit.mine ? 'Сохранить' : 'Закрепить'}</button>
+          <button className="btn primary" onClick={() => { save({ ...habit, mine: true, ...sched, inCalendar }); onClose(); }}><IconPin size={16} /> {habit.mine ? 'Сохранить' : 'Закрепить'}</button>
         </>
       }
     >
@@ -136,6 +137,7 @@ function PinDialog({ habit, onClose }: { habit: Habit; onClose: () => void }) {
         <div className="field">
           <span className="label-text">Как часто выполнять</span>
           <SchedulePicker value={sched} onChange={setSched} />
+          <div style={{ marginTop: 8 }}><Switch checked={inCalendar} onChange={setInCalendar} label="Показывать в календаре «Неделя»" /></div>
         </div>
         {habit.anchor && (
           <p className="small row" style={{ alignItems: 'flex-start', gap: 6 }}>
@@ -185,7 +187,7 @@ export function HabitCard({ habit, compact }: { habit: Habit; compact?: boolean 
 
       {habit.mine && !compact && (
         <div className="row wrap" style={{ justifyContent: 'space-between', gap: 6 }}>
-          <span className="small row" style={{ gap: 4, color: 'var(--accent)', fontWeight: 700 }}><IconCalendarRepeat size={14} /> {scheduleLabel(habit)}</span>
+          <span className="small row" style={{ gap: 4, color: 'var(--accent)', fontWeight: 700 }}><IconCalendarRepeat size={14} /> {scheduleLabel(habit)}{habit.inCalendar ? " · в календаре" : ""}</span>
           <WeekDots habit={habit} />
         </div>
       )}
@@ -279,7 +281,12 @@ export function HabitEditor({ habit, onClose }: { habit: Habit; onClose: () => v
             <span className="track" />
             <span>Закрепить — выполнять регулярно</span>
           </label>
-          {h.mine && <div style={{ marginTop: 6 }}><SchedulePicker value={h} onChange={(s) => p(s)} /></div>}
+          {h.mine && (
+            <div className="stack" style={{ marginTop: 6, gap: 8 }}>
+              <SchedulePicker value={h} onChange={(s) => p(s)} />
+              <Switch checked={!!h.inCalendar} onChange={(v) => p({ inCalendar: v })} label="Показывать в календаре «Неделя»" />
+            </div>
+          )}
         </div>
         <div className="field">
           <label htmlFor="h-anchor">Якорь: после чего вы будете это делать</label>

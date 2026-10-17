@@ -95,6 +95,37 @@ export function isDueOn(h: Habit, logs: HabitLog[], d = new Date()): boolean {
   return doneInWeek(days, d) < timesOf(h);
 }
 
+// Для календаря «Неделя»: стоит ли привычка в этот день и сделана ли.
+// Прошедшие дни — по факту (что было сделано, и что пропущено по расписанию).
+// Будущие: по дням недели — по расписанию; «раз в N дней» — прогноз от последнего выполнения;
+// «N раз в неделю» конкретных дней нет — такие показываются отдельной строкой над неделей.
+export function calendarPlan(h: Habit, logs: HabitLog[], d: Date, now = new Date()): { show: boolean; done: boolean; missed: boolean } {
+  const key = dayKey(d);
+  const today = dayKey(now);
+  const days = doneDays(logs, h.id);
+  const done = days.includes(key);
+  if (done) return { show: true, done, missed: false };
+  const f = freqOf(h);
+  if (f === 'weekly') return { show: false, done, missed: false };
+  if (f === 'days') return { show: scheduledOn(h, d), done, missed: key < today && scheduledOn(h, d) };
+  // раз в N дней
+  if (key < today) return { show: false, done, missed: false };
+  const n = everyOf(h);
+  const last = days.filter((k) => k <= today).pop();
+  let next = startOfDay(now);
+  if (last) {
+    const fromLast = addDays(parseDay(last), n);
+    if (fromLast > next) next = fromLast;
+  }
+  const diff = Math.round((startOfDay(d).getTime() - next.getTime()) / 86400000);
+  return { show: diff >= 0 && diff % n === 0, done, missed: false };
+}
+
+export const weeklyProgress = (h: Habit, logs: HabitLog[], weekDay: Date) => ({
+  done: Math.min(doneInWeek(doneDays(logs, h.id), weekDay), timesOf(h)),
+  need: timesOf(h),
+});
+
 // Подсказка о периоде: «на этой неделе 1 из 2», «следующий раз через 2 дня»
 export function periodInfo(h: Habit, logs: HabitLog[], d = new Date()): string | null {
   const f = freqOf(h);

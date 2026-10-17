@@ -1,9 +1,11 @@
 import { useState, type DragEvent } from 'react';
 import { IconChevronLeft, IconChevronRight, IconCheck, IconCalendarEvent } from '@tabler/icons-react';
-import type { Step, Task } from '../types';
-import { liveTasks, useStore } from '../store';
+import type { Habit, Step, Task } from '../types';
+import { liveHabits, liveTasks, useStore } from '../store';
 import { useUI } from '../uiStore';
 import { PALETTE } from '../lib/colors';
+import { CATEGORIES, calendarPlan, freqOf, weeklyProgress } from '../lib/habits';
+import { DynIcon } from '../lib/icons';
 import { addDays, dayKey, dayLabel, formatMin, startOfWeek, weekdayShort } from '../lib/util';
 import { Bar, colorVars } from '../components/ui';
 
@@ -51,6 +53,34 @@ function StepChip({ it, days, onMove }: { it: Item; days: Date[]; onMove: (it: I
   );
 }
 
+// Привычка в дне календаря: пунктирная рамка, отметить можно только сегодня
+function HabitChip({ habit, done, missed, isToday }: { habit: Habit; done: boolean; missed: boolean; isToday: boolean }) {
+  const toggle = useStore((s) => s.toggleHabit);
+  const color = (CATEGORIES[habit.category] ?? CATEGORIES.care).color;
+  const p = PALETTE[color];
+  return (
+    <div className={`step-chip tint ${done ? 'done' : ''}`}
+      style={{ ...colorVars(color), borderStyle: 'dashed', cursor: 'default', opacity: missed ? 0.5 : undefined }}
+      title={missed ? 'Пропущено' : isToday ? 'Привычка на сегодня' : 'Запланированная привычка'}>
+      <div className="row" style={{ gap: 6, alignItems: 'flex-start' }}>
+        {isToday ? (
+          <button className="check" style={{ width: 18, height: 18, borderRadius: 9, borderColor: p[400], background: done ? p[400] : 'transparent' }}
+            onClick={() => toggle(habit.id)} aria-label="Привычка выполнена">
+            {done && <IconCheck size={12} stroke={3} />}
+          </button>
+        ) : (
+          <span style={{ display: 'inline-flex', marginTop: 1 }}>{done ? <IconCheck size={15} stroke={3} /> : <DynIcon name={habit.icon} size={15} />}</span>
+        )}
+        <span className="grow">{habit.title}</span>
+      </div>
+      <div className="row wrap tint-sub" style={{ justifyContent: 'space-between', fontWeight: 600, fontSize: 11.5, gap: 2 }}>
+        <span>привычка · {habit.minutes} мин</span>
+        {missed && <span>пропуск</span>}
+      </div>
+    </div>
+  );
+}
+
 export function WeekPage() {
   const data = useStore((s) => s.data);
   const schedule = useStore((s) => s.scheduleStep);
@@ -65,6 +95,9 @@ export function WeekPage() {
   const items: Item[] = tasks.flatMap((t) => t.steps.map((s) => ({ t, s })));
   const allItems: Item[] = liveTasks(data).filter((t) => !t.inbox).flatMap((t) => t.steps.map((s) => ({ t, s })));
   const pool = items.filter((x) => !x.s.done && !x.s.date);
+  // закреплённые привычки, отмеченные «показывать в календаре»
+  const calHabits = liveHabits(data).filter((h) => h.mine && h.inCalendar);
+  const weeklyHabits = calHabits.filter((h) => freqOf(h) === 'weekly');
   const overdue = items.filter((x) => !x.s.done && x.s.date && x.s.date < today);
 
   const move = (it: Item, date?: string) => schedule(it.t.id, it.s.id, date);
@@ -92,7 +125,7 @@ export function WeekPage() {
       <div className="page-head">
         <div>
           <h1>Неделя</h1>
-          <p className="sub">Перетащите шаги по дням или нажмите на значок календаря. Полоска показывает загрузку дня.</p>
+          <p className="sub">Перетащите шаги по дням или нажмите на значок календаря. Полоска показывает загрузку дня. Привычки с пунктирной рамкой — закреплённые с отметкой «в календаре».</p>
         </div>
         <div className="row">
           <button className="btn icon" onClick={() => setOffset(offset - 1)} aria-label="Прошлая неделя"><IconChevronLeft size={18} /></button>
@@ -116,11 +149,29 @@ export function WeekPage() {
         </div>
       )}
 
+      {weeklyHabits.length > 0 && (
+        <div className="card soft row wrap" style={{ marginTop: 14, gap: 8 }}>
+          <span className="small muted" style={{ fontWeight: 700 }}>Привычки на неделю:</span>
+          {weeklyHabits.map((h) => {
+            const pr = weeklyProgress(h, data.habitLogs, days[0]);
+            const ok = pr.done >= pr.need;
+            return (
+              <span key={h.id} className="tag tint" style={{ ...colorVars((CATEGORIES[h.category] ?? CATEGORIES.care).color), padding: '4px 10px' }}>
+                {ok ? <IconCheck size={13} /> : <DynIcon name={h.icon} size={13} />} {h.title} · {pr.done} из {pr.need}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
       <div className="week section">
         {days.map((d) => {
           const key = dayKey(d);
           const list = allItems.filter((x) => x.s.date === key).sort((a, b) => Number(a.s.done) - Number(b.s.done));
-          const load = list.reduce((a, x) => a + x.s.minutes, 0);
+          const habitsHere = calHabits.map((h) => ({ h, plan: calendarPlan(h, data.habitLogs, d) })).filter((x) => x.plan.show || x.plan.missed);
+          // в загрузку дня входят ещё не сделанные привычки на сегодня и будущие дни
+          const habitLoad = key >= today ? habitsHere.filter((x) => !x.plan.done).reduce((a, x) => a + x.h.minutes, 0) : 0;
+          const load = list.reduce((a, x) => a + x.s.minutes, 0) + habitLoad;
           const ratio = load / cap;
           const color = ratio > 1 ? 'var(--danger)' : ratio > 0.8 ? 'var(--warning)' : 'var(--success)';
           return (
@@ -130,6 +181,7 @@ export function WeekPage() {
               </div>
               <Bar value={Math.min(1, ratio)} color={color} thin />
               <span className="small faint" style={{ marginTop: -2 }}>{formatMin(load)} из {formatMin(cap)}{ratio > 1 ? ' — перегруз!' : ''}</span>
+              {habitsHere.map(({ h, plan }) => <HabitChip key={h.id} habit={h} done={plan.done} missed={plan.missed} isToday={key === today} />)}
               {list.map((it) => <StepChip key={it.s.id} it={it} days={days} onMove={move} />)}
             </div>
           );

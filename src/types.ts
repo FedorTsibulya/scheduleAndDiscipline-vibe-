@@ -93,6 +93,7 @@ export interface Habit extends Syncable {
   timesPerWeek?: number;
   builtIn?: boolean;
   hidden?: boolean; // скрыто из пула (не подходит этому пользователю)
+  inCalendar?: boolean; // показывать закреплённую привычку в календаре «Неделя»
 }
 
 // Отметка «сделано» за конкретный день
