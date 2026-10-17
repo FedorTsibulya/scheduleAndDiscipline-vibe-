@@ -13,6 +13,7 @@ import { notificationsSupported, notify, requestNotifications } from '../lib/not
 import { syncConfigured } from '../lib/sync';
 import { uid } from '../lib/util';
 import { AI_MODELS, AiError, aiConfigured, testKey } from '../lib/ai';
+import { BUILD_TIME, checkForUpdate } from '../lib/appUpdate';
 
 function NumField({ label, value, onChange, min = 1, max = 600 }: { label: string; value: number; onChange: (v: number) => void; min?: number; max?: number }) {
   return (
@@ -96,6 +97,37 @@ function ClaudeSettings() {
       </div>
       {test.state === 'ok' && <p className="small" style={{ marginTop: 10, color: 'var(--success)' }}>Ключ работает, Claude на связи.</p>}
       {test.state === 'error' && <p className="small row" style={{ marginTop: 10, color: 'var(--danger)', alignItems: 'flex-start' }}><IconAlertTriangle size={16} style={{ flexShrink: 0 }} /> {test.msg}</p>}
+    </div>
+  );
+}
+
+function AppVersion() {
+  const [state, setState] = useState<'idle' | 'busy' | 'latest' | 'found' | 'offline'>('idle');
+  const built = new Date(BUILD_TIME);
+  const check = async () => {
+    if (!navigator.onLine) return setState('offline');
+    setState('busy');
+    try {
+      setState((await checkForUpdate()) ? 'found' : 'latest');
+    } catch {
+      setState('offline');
+    }
+  };
+  return (
+    <div className="card">
+      <h2 style={{ marginBottom: 6 }}>О приложении</h2>
+      <p className="small muted" style={{ marginBottom: 10 }}>
+        Версия от {built.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}.
+        Приложение само проверяет обновления при запуске и когда вы в него возвращаетесь.
+      </p>
+      <div className="row wrap">
+        <button className="btn" onClick={() => void check()} disabled={state === 'busy'}>
+          <IconRefresh size={16} className={state === 'busy' ? 'spin' : ''} /> Проверить обновления
+        </button>
+        {state === 'latest' && <span className="small" style={{ color: 'var(--success)' }}>У вас последняя версия.</span>}
+        {state === 'found' && <span className="small" style={{ color: 'var(--accent)' }}>Нашлась новая версия — сейчас приложение перезагрузится.</span>}
+        {state === 'offline' && <span className="small muted">Нет связи — проверить не удалось.</span>}
+      </div>
     </div>
   );
 }
@@ -238,6 +270,8 @@ export function SettingsPage() {
           </div>
           {msg && <p className="small muted" style={{ marginTop: 10 }}>{msg}</p>}
         </div>
+
+        <AppVersion />
 
         <div className="card" style={{ borderColor: 'var(--danger-soft)' }}>
           <h2 style={{ marginBottom: 6 }}>Сбросить всё</h2>

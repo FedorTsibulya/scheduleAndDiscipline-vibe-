@@ -5,6 +5,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 // base: './' — приложение работает из любой подпапки (например, GitHub Pages: /имя-репозитория/)
 export default defineConfig({
   base: './',
+  // время сборки показывается в настройках — по нему видно, какая версия открыта
+  define: { __BUILD_TIME__: JSON.stringify(new Date().toISOString()) },
   plugins: [
     react(),
     VitePWA({
