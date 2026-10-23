@@ -23,7 +23,7 @@ export function HabitsPage() {
   const pinned = habits.filter((h) => h.mine);
   const todayList = pinnedFor(data.habits, data.habitLogs);
   const today = dayKey();
-  const todayDone = todayList.filter((h) => doneOn(data.habitLogs, h.id, today)).length;
+  const todayDone = todayList.filter((h) => doneOn(data.habitLogs, h, today)).length;
   const visible = habits.filter((h) => visibleInPool(h, cats));
   const hiddenOnes = habits.filter((h) => !visibleInPool(h, cats));
   const shownCats = CATEGORY_ORDER.filter((c) => visible.some((h) => h.category === c));

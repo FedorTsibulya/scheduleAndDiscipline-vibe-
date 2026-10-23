@@ -5,7 +5,7 @@ import type {
 } from './types';
 import { emptyData } from './lib/defaults';
 import { dayKey, dayStartTs, parseDay, setDayStartHour, uid } from './lib/util';
-import { ALL_HABITS_BONUS, habitPoints, pinnedFor, upgradeBuiltinHabits } from './lib/habits';
+import { ALL_HABITS_BONUS, countOn, doneOn, habitPoints, perDayOf, pinnedFor, upgradeBuiltinHabits } from './lib/habits';
 import { isComplete } from './lib/progress';
 import { ACHIEVEMENTS, buildCtx } from './lib/achievements';
 import type { AiConfig, WeeklyReview } from './lib/ai';
@@ -55,10 +55,13 @@ interface State {
   completeTask: (taskId: string) => void;
   reopenTask: (taskId: string) => void;
   mergeTasks: (ids: string[], mode: MergeMode, keepSubsteps: boolean) => string | null;
+  doRepeat: (taskId: string) => void;
+  undoRepeat: (taskId: string) => void;
   scheduleStep: (taskId: string, stepId: string, date: string | undefined) => void;
 
   // простые дела и привычки
   toggleHabit: (habitId: string, day?: string) => void;
+  unmarkHabit: (habitId: string, day?: string) => void;
   saveHabit: (h: Habit) => void;
   deleteHabit: (id: string) => void;
 
@@ -197,10 +200,9 @@ export const useStore = create<State>()(
         saveTask: (t) =>
           commit((d) => {
             const exists = d.tasks.some((x) => x.id === t.id);
-            let task = touch(t);
-            // если все шаги отмечены в редакторе — задача завершена; если сняты — снова открыта
-            if (!task.completedAt && isComplete(task)) task = { ...task, completedAt: now() };
-            if (task.completedAt && task.steps.length && !isComplete(task)) task = { ...task, completedAt: undefined };
+            // задача сама не завершается, даже если все шаги отмечены: шаги появляются по ходу работы,
+            // завершение — только явным действием «Завершить задачу»
+            const task = touch(t);
             return { ...d, tasks: exists ? d.tasks.map((x) => (x.id === t.id ? task : x)) : [...d.tasks, task] };
           }),
 
@@ -216,16 +218,18 @@ export const useStore = create<State>()(
             if (!step.done) {
               const pts = stepPoints(task, now());
               const steps: Step[] = task.steps.map((s) => (s.id === stepId ? { ...s, done: true, doneAt: now() } : s));
-              let updated: Task = { ...task, steps };
               const events = [pointsEvent('step', pts.amount, `Шаг: ${step.title}`, { taskId, stepId })];
-              if (!task.completedAt && isComplete(updated)) {
-                updated = { ...updated, completedAt: now() };
-                events.push(pointsEvent('task', TASK_BONUS, `Задача завершена: ${task.title}`, { taskId }));
-                cel.push({ type: 'task', title: task.title, points: pts.amount + TASK_BONUS, taskId });
-              } else {
-                cel.push({ type: 'step', points: pts.amount, postponed: pts.postponed });
+              cel.push({ type: 'step', points: pts.amount, postponed: pts.postponed });
+              // регулярная цель (N раз) по-прежнему закрывается сама, когда цель достигнута
+              const goalReached = !!task.targetCount && !task.completedAt && isComplete({ ...task, steps });
+              if (goalReached) {
+                events.push(pointsEvent('task', TASK_BONUS, `Цель достигнута: ${task.title}`, { taskId }));
+                cel.splice(0, 1, { type: 'task', title: task.title, points: pts.amount + TASK_BONUS, taskId });
               }
-              return { ...mapTask(d, taskId, () => updated), points: [...d.points, ...events] };
+              return {
+                ...mapTask(d, taskId, (t) => ({ ...t, steps, completedAt: goalReached ? now() : t.completedAt })),
+                points: [...d.points, ...events],
+              };
             }
             // отмена шага: очки за него (и бонус за задачу) аннулируются
             const steps = task.steps.map((s) => (s.id === stepId ? { ...s, done: false, doneAt: undefined } : s));
@@ -241,25 +245,59 @@ export const useStore = create<State>()(
           }, cel, { revoke: step.done });
         },
 
-        // Завершить задачу целиком (для задач без шагов или «закрыть досрочно»)
+        // Завершить задачу явно. Если остались невыполненные шаги — они отмечаются разом
+        // (и за них начисляются очки как за шаг); если все шаги уже сделаны — только бонус за задачу.
         completeTask: (taskId) => {
           const task = get().data.tasks.find((t) => t.id === taskId);
-          if (!task || task.completedAt) return;
-          const pts = stepPoints(task, now()).amount;
+          if (!task || task.completedAt || task.repeat) return;
+          const leftover = !task.targetCount && (task.steps.length === 0 || task.steps.some((s) => !s.done));
+          const pts = leftover ? stepPoints(task, now()).amount : 0;
+          const at = now();
           commit(
             (d) => ({
               ...mapTask(d, taskId, (t) => ({
                 ...t,
-                completedAt: now(),
-                steps: t.targetCount ? t.steps : t.steps.map((s) => (s.done ? s : { ...s, done: true, doneAt: now() })),
+                completedAt: at,
+                steps: t.targetCount ? t.steps : t.steps.map((s) => (s.done ? s : { ...s, done: true, doneAt: at })),
               })),
               points: [
                 ...d.points,
-                pointsEvent('step', pts, `Задача: ${task.title}`, { taskId }),
+                ...(pts ? [pointsEvent('step', pts, `Задача: ${task.title}`, { taskId })] : []),
                 pointsEvent('task', TASK_BONUS, `Задача завершена: ${task.title}`, { taskId }),
               ],
             }),
             [{ type: 'task', title: task.title, points: pts + TASK_BONUS, taskId }],
+          );
+        },
+
+        // Постоянная задача: выполнить ещё раз (сколько угодно раз, задача не закрывается)
+        doRepeat: (taskId) => {
+          const task = get().data.tasks.find((t) => t.id === taskId);
+          if (!task?.repeat) return;
+          const at = now();
+          const pts = stepPoints({ ...task, createdAt: at }, at).amount; // без бонуса за давность — дело регулярное
+          commit(
+            (d) => ({
+              ...mapTask(d, taskId, (t) => ({ ...t, doneLog: [...(t.doneLog ?? []), at] })),
+              // stepId связывает очки с конкретным выполнением — для отмены
+              points: [...d.points, pointsEvent('step', pts, `Постоянная задача: ${task.title}`, { taskId, stepId: `rep-${at}` })],
+            }),
+            [{ type: 'step', points: pts, postponed: 0 }],
+          );
+        },
+
+        // Отменить последнее выполнение постоянной задачи
+        undoRepeat: (taskId) => {
+          const task = get().data.tasks.find((t) => t.id === taskId);
+          const last = task?.doneLog?.[task.doneLog.length - 1];
+          if (!task || last === undefined) return;
+          commit(
+            (d) => ({
+              ...mapTask(d, taskId, (t) => ({ ...t, doneLog: (t.doneLog ?? []).slice(0, -1) })),
+              points: d.points.map((p) => (!p.deleted && p.taskId === taskId && p.stepId === `rep-${last}` ? { ...p, deleted: true, updatedAt: now() } : p)),
+            }),
+            [],
+            { revoke: true },
           );
         },
 
@@ -299,7 +337,31 @@ export const useStore = create<State>()(
         scheduleStep: (taskId, stepId, date) =>
           commit((d) => mapTask(d, taskId, (t) => ({ ...t, steps: t.steps.map((s) => (s.id === stepId ? { ...s, date } : s)) }))),
 
-        // Отметить простое дело за сегодня (повторное нажатие снимает отметку и очки)
+        // Снять последнюю отметку привычки за день (вместе с её очками и, если был, бонусом за весь день)
+        unmarkHabit: (habitId, day) => {
+          const d0 = get().data;
+          const habit = d0.habits.find((x) => x.id === habitId);
+          const today = day ?? dayKey();
+          const last = d0.habitLogs.filter((l) => !l.deleted && l.habitId === habitId && l.day === today).sort((a, b) => b.at - a.at)[0];
+          if (!habit || !last) return;
+          const bonusId = `all-${today}`; // stepId бонуса «все закреплённые привычки за день»
+          commit(
+            (d) => ({
+              ...d,
+              habitLogs: d.habitLogs.map((l) => (l.id === last.id ? { ...l, deleted: true, updatedAt: now() } : l)),
+              points: d.points.map((p) =>
+                !p.deleted && p.kind === 'habit' && (p.stepId === last.id || (habit.mine && p.stepId === bonusId))
+                  ? { ...p, deleted: true, updatedAt: now() }
+                  : p,
+              ),
+            }),
+            [],
+            { revoke: true },
+          );
+        },
+
+        // Отметить привычку. Обычная (раз в день): повторное нажатие снимает отметку.
+        // Несколько раз в день (стакан воды ×4): каждое нажатие +1 до нормы, на полной норме — снимает последнюю.
         // day — отметить за прошедший день (например, за вчера, если забыли); по умолчанию сегодня
         toggleHabit: (habitId, day) => {
           const d0 = get().data;
@@ -307,23 +369,11 @@ export const useStore = create<State>()(
           if (!habit) return;
           const today = day ?? dayKey();
           const isPast = today !== dayKey();
-          const bonusId = `all-${today}`; // stepId бонуса «все закреплённые привычки за день»
-          const existing = d0.habitLogs.find((l) => !l.deleted && l.habitId === habitId && l.day === today);
-          if (existing) {
-            // отмена: снимаем очки за это дело и, если был, бонус за весь день
-            commit(
-              (d) => ({
-                ...d,
-                habitLogs: d.habitLogs.map((l) => (l.id === existing.id ? { ...l, deleted: true, updatedAt: now() } : l)),
-                points: d.points.map((p) =>
-                  !p.deleted && p.kind === 'habit' && (p.stepId === existing.id || (habit.mine && p.stepId === bonusId))
-                    ? { ...p, deleted: true, updatedAt: now() }
-                    : p,
-                ),
-              }),
-              [],
-              { revoke: true },
-            );
+          const bonusId = `all-${today}`;
+          const count = countOn(d0.habitLogs, habitId, today);
+          const need = perDayOf(habit);
+          if (count >= need) {
+            get().unmarkHabit(habitId, today);
             return;
           }
           // отметка за прошедший день ставится на его вечер — так она попадает в статистику того дня
@@ -331,13 +381,15 @@ export const useStore = create<State>()(
           const log = { id: uid(), updatedAt: now(), habitId, day: today, at };
           const pts = habitPoints(habit);
           const label = (habit.tier ?? 'easy') === 'hard' ? 'Дело' : 'Простое дело';
-          // все ли закреплённые на сегодня привычки будут сделаны после этой отметки
+          // все ли закреплённые на сегодня привычки будут выполнены (с учётом дневной нормы) после этой отметки
           const pinned = pinnedFor(d0.habits, d0.habitLogs, parseDay(today));
+          const nowComplete = count + 1 >= need;
           const allDone =
-            pinned.length > 1 && pinned.some((x) => x.id === habitId) &&
-            pinned.every((x) => x.id === habitId || d0.habitLogs.some((l) => !l.deleted && l.habitId === x.id && l.day === today)) &&
+            nowComplete && pinned.length > 1 && pinned.some((x) => x.id === habitId) &&
+            pinned.every((x) => x.id === habitId || doneOn(d0.habitLogs, x, today)) &&
             !d0.points.some((p) => !p.deleted && p.stepId === bonusId);
-          const events = [pointsEvent('habit', pts, `${label}: ${habit.title}`, { stepId: log.id })];
+          const progress = need > 1 ? ` (${count + 1}/${need})` : '';
+          const events = [pointsEvent('habit', pts, `${label}: ${habit.title}${progress}`, { stepId: log.id })];
           if (allDone) events.push(pointsEvent('habit', ALL_HABITS_BONUS, 'Все закреплённые привычки за день', { stepId: bonusId }));
           commit(
             // stepId хранит id отметки — чтобы при отмене снять именно эти очки

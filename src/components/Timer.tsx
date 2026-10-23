@@ -169,6 +169,10 @@ export function FocusScreen() {
   const st = useStore.getState;
   const now = useNow(250);
   const [asking, setAsking] = useState(false);
+  // постоянную задачу после фокуса отмечаем один раз на сессию
+  const [markedFor, setMarkedFor] = useState<string | null>(null);
+  const repeatMarked = !!after && markedFor === after.id;
+  const setRepeatMarked = (v: boolean) => setMarkedFor(v && after ? after.id : null);
 
   if (!open) return null;
 
@@ -201,6 +205,11 @@ export function FocusScreen() {
             {task && step && !step.done && (
               <button className="btn violet lg" onClick={() => st().toggleStep(task.id, step.id)}>
                 <IconCheck size={18} /> Шаг «{step.title}» выполнен
+              </button>
+            )}
+            {task?.repeat && !repeatMarked && (
+              <button className="btn violet lg" onClick={() => { st().doRepeat(task.id); setRepeatMarked(true); }}>
+                <IconCheck size={18} /> «{task.title}» — сделано
               </button>
             )}
             <div className="row wrap" style={{ justifyContent: 'center' }}>

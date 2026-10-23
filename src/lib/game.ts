@@ -45,6 +45,7 @@ export function activeDays(data: AppData): Set<string> {
   for (const t of data.tasks) {
     if (t.deleted) continue;
     for (const st of t.steps) if (st.done && st.doneAt) s.add(dayKey(st.doneAt));
+    for (const ts of t.doneLog ?? []) s.add(dayKey(ts)); // выполнения постоянных задач
     if (t.completedAt) s.add(dayKey(t.completedAt));
   }
   for (const se of data.sessions) {

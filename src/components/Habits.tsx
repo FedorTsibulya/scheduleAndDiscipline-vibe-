@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import {
   IconCheck, IconPin, IconPinnedOff, IconChevronDown, IconChevronUp, IconPencil, IconDice5, IconAnchor, IconBulb, IconHeart,
-  IconTrash, IconFlame, IconCoin, IconCalendarRepeat, IconEye, IconEyeOff,
+  IconTrash, IconFlame, IconCoin, IconCalendarRepeat, IconEye, IconEyeOff, IconMinus,
 } from '@tabler/icons-react';
 import type { Habit, HabitCategory, HabitTier } from '../types';
 import { liveHabits, useStore } from '../store';
 import {
-  ALL_HABITS_BONUS, CATEGORIES, TIERS, WEEKDAYS, doneOn, everyOf, freqOf, habitPoints, habitStreak, periodInfo, pinnedFor,
+  ALL_HABITS_BONUS, CATEGORIES, TIERS, WEEKDAYS, countOn, doneOn, everyOf, perDayOf, freqOf, habitPoints, habitStreak, periodInfo, pinnedFor,
   scheduleLabel, scheduledOn, streakLabel, timesOf, visibleInPool, type Freq,
 } from '../lib/habits';
 import { DynIcon, ICON_KEYS } from '../lib/icons';
@@ -24,7 +24,7 @@ function WeekDots({ habit }: { habit: Habit }) {
   return (
     <div className="row" style={{ gap: 4 }} aria-label="Последние 7 дней">
       {days.map((d) => {
-        const on = doneOn(logs, habit.id, dayKey(d));
+        const on = doneOn(logs, habit, dayKey(d));
         const planned = freqOf(habit) !== 'days' || scheduledOn(habit, d);
         return (
           <span key={dayKey(d)} title={`${weekdayShort(d)}: ${on ? 'сделано' : planned ? 'не сделано' : 'не запланировано'}`}
@@ -157,7 +157,10 @@ export function HabitCard({ habit, compact }: { habit: Habit; compact?: boolean 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [pinning, setPinning] = useState(false);
-  const done = doneOn(logs, habit.id, dayKey());
+  const unmark = useStore((s) => s.unmarkHabit);
+  const done = doneOn(logs, habit, dayKey());
+  const need = perDayOf(habit);
+  const count = countOn(logs, habit.id, dayKey());
   const streak = habitStreak(logs, habit);
   const cat = CATEGORIES[habit.category] ?? CATEGORIES.care;
   const tier = tierOf(habit);
@@ -215,10 +218,18 @@ export function HabitCard({ habit, compact }: { habit: Habit; compact?: boolean 
         <button className="btn sm ghost" style={{ paddingLeft: 6, paddingRight: 6 }} onClick={() => setOpen(!open)} aria-expanded={open}>
           {open ? <IconChevronUp size={15} /> : <IconChevronDown size={15} />} {open ? 'Свернуть' : 'Зачем и как'}
         </button>
-        <button className={`btn sm ${done ? '' : 'primary'}`} onClick={() => toggle(habit.id)} aria-pressed={done}
-          style={done ? { color: 'var(--success)', borderColor: 'var(--success)' } : undefined}>
-          <IconCheck size={15} /> {done ? 'Сделано' : `Сделал +${pts}`}
-        </button>
+        <div className="row" style={{ gap: 4 }}>
+          {need > 1 && count > 0 && !done && (
+            <button className="btn sm ghost" onClick={() => unmark(habit.id)} aria-label="Снять одну отметку"><IconMinus size={15} /></button>
+          )}
+          <button className={`btn sm ${done ? '' : 'primary'}`} onClick={() => toggle(habit.id)} aria-pressed={done}
+            style={done ? { color: 'var(--success)', borderColor: 'var(--success)' } : undefined}>
+            <IconCheck size={15} />
+            {need > 1
+              ? done ? `Сделано ${count}/${need}` : `+1 · ${count}/${need}`
+              : done ? 'Сделано' : `Сделал +${pts}`}
+          </button>
+        </div>
       </div>
       {editing && <HabitEditor habit={habit} onClose={() => setEditing(false)} />}
       {pinning && <PinDialog habit={habit} onClose={() => setPinning(false)} />}
@@ -263,6 +274,10 @@ export function HabitEditor({ habit, onClose }: { habit: Habit; onClose: () => v
           <div className="field" style={{ width: 110 }}>
             <label htmlFor="h-min">Минут</label>
             <input id="h-min" className="input" type="number" min={1} max={120} value={h.minutes} onChange={(e) => p({ minutes: Math.max(1, Math.min(120, Math.round(+e.target.value) || 1)) })} />
+          </div>
+          <div className="field" style={{ width: 110 }}>
+            <label htmlFor="h-perday">Раз в день</label>
+            <input id="h-perday" className="input" type="number" min={1} max={20} value={perDayOf(h)} onChange={(e) => p({ perDay: Math.max(1, Math.min(20, Math.round(+e.target.value) || 1)) })} />
           </div>
           <div className="field">
             <span className="label-text">Сложность</span>
@@ -324,13 +339,13 @@ export function HabitPicker({ count = 3 }: { count?: number }) {
   const today = dayKey();
   const habits = liveHabits(data).filter((x) => tierOf(x) === 'easy' && visibleInPool(x, data.settings.habitCategories));
   const picks = useMemo(() => {
-    const pool = habits.filter((x) => !doneOn(data.habitLogs, x.id, today));
+    const pool = habits.filter((x) => !doneOn(data.habitLogs, x, today));
     const weighted = pool.map((x) => ({ x, w: Math.random() * (x.mine ? 2 : 1) * (x.minutes <= 3 ? 1.5 : 1) }));
     return weighted.sort((a, b) => b.w - a.w).slice(0, count).map((a) => a.x.id);
     // пересчитываем только по кнопке «Другие» и при смене дня, а не после каждой отметки
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seed, today, habits.length]);
-  const doneToday = liveHabits(data).filter((x) => doneOn(data.habitLogs, x.id, today)).length;
+  const doneToday = liveHabits(data).filter((x) => doneOn(data.habitLogs, x, today)).length;
 
   return (
     <div className="stack" style={{ gap: 10 }}>
@@ -359,8 +374,8 @@ export function PinnedToday({ onOpenAll }: { onOpenAll?: () => void }) {
   const today = dayKey();
   const list = pinnedFor(data.habits, data.habitLogs);
   if (!list.length) return null;
-  const done = list.filter((x) => doneOn(data.habitLogs, x.id, today)).length;
-  const sorted = [...list].sort((a, b) => Number(doneOn(data.habitLogs, a.id, today)) - Number(doneOn(data.habitLogs, b.id, today)));
+  const done = list.filter((x) => doneOn(data.habitLogs, x, today)).length;
+  const sorted = [...list].sort((a, b) => Number(doneOn(data.habitLogs, a, today)) - Number(doneOn(data.habitLogs, b, today)));
 
   return (
     <div className="section">
@@ -371,12 +386,22 @@ export function PinnedToday({ onOpenAll }: { onOpenAll?: () => void }) {
       <div style={{ marginBottom: 10 }}><Bar value={done / list.length} color="var(--success)" /></div>
       <div className="card" style={{ padding: '6px 14px' }}>
         {sorted.map((x) => {
-          const on = doneOn(data.habitLogs, x.id, today);
+          const on = doneOn(data.habitLogs, x, today);
+          const need = perDayOf(x);
+          const count = countOn(data.habitLogs, x.id, today);
           const streak = habitStreak(data.habitLogs, x);
           const cat = CATEGORIES[x.category] ?? CATEGORIES.care;
           return (
             <div key={x.id} className={`step-row ${on ? 'done' : ''}`}>
-              <Check on={on} label="Привычка выполнена" onClick={() => toggle(x.id)} />
+              {need > 1 ? (
+                // несколько раз в день: кнопка-счётчик, каждое нажатие +1
+                <button className={`check ${on ? 'on' : ''}`} onClick={() => toggle(x.id)} aria-label={`Отметить: ${count} из ${need}`}
+                  style={{ width: 'auto', minWidth: 40, padding: '0 6px', fontSize: 12, fontWeight: 800, color: on ? '#fff' : 'var(--text-2)' }}>
+                  {count}/{need}
+                </button>
+              ) : (
+                <Check on={on} label="Привычка выполнена" onClick={() => toggle(x.id)} />
+              )}
               <span className="tint-sub" style={{ ...colorVars(cat.color), display: 'inline-flex' }}><DynIcon name={x.icon} size={18} /></span>
               <div className="grow">
                 <p className="step-title" style={{ fontWeight: 700 }}>{x.title}</p>

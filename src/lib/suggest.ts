@@ -1,5 +1,5 @@
 import type { Task } from '../types';
-import { isActive, nextStep } from './progress';
+import { allStepsDone, isActive, nextStep, repeatCountOn } from './progress';
 import { dayKey } from './util';
 import { daysLeft } from './deadline';
 
@@ -8,7 +8,11 @@ import { daysLeft } from './deadline';
 export function scoreTask(t: Task, moodId: string | null, now = Date.now()): number {
   const today = dayKey(now);
   const step = nextStep(t);
+  // все шаги сделаны — осталось только завершить: в подборке, но в самом конце
+  if (allStepsDone(t)) return 0.5;
   let s = 1;
+  // постоянная задача: если сегодня уже сделана — ниже, если нет — повыше (её смысл в регулярности)
+  if (t.repeat) s += repeatCountOn(t, today) > 0 ? -1 : 2;
   if (t.important) s += 3;
   if (t.due) {
     // чем ближе срок, тем выше задача; просроченные — выше всех
@@ -27,7 +31,8 @@ export function scoreTask(t: Task, moodId: string | null, now = Date.now()): num
 export function candidates(tasks: Task[], moodId: string | null): Task[] {
   return tasks.filter((t) => {
     if (!isActive(t)) return false;
-    if (t.steps.length && !nextStep(t)) return false;
+    // регулярная цель, у которой не осталось шагов, предлагать нечего
+    if (t.targetCount && t.steps.length && !nextStep(t)) return false;
     // без настроения подходит под любое; с настроением — только под отмеченные
     return !moodId || t.moods.length === 0 || t.moods.includes(moodId);
   });

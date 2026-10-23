@@ -71,8 +71,22 @@ const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDat
 const daysBetween = (a: string, b: Date) => Math.round((startOfDay(b).getTime() - parseDay(a).getTime()) / 86400000);
 const weekStart = (d: Date) => addDays(startOfDay(d), -weekdayIndex(d));
 
-const doneDays = (logs: HabitLog[], habitId: string) =>
-  [...new Set(logs.filter((l) => !l.deleted && l.habitId === habitId).map((l) => l.day))].sort();
+// Сколько раз в день нужно сделать привычку (например, стакан воды 4 раза)
+export const perDayOf = (h: Pick<Habit, 'perDay'>) => Math.max(1, Math.min(20, h.perDay ?? 1));
+
+type HabitRef = Pick<Habit, 'id' | 'perDay'>;
+
+// Сколько раз привычка отмечена в этот день
+export const countOn = (logs: HabitLog[], habitId: string, day: string) =>
+  logs.filter((l) => !l.deleted && l.habitId === habitId && l.day === day).length;
+
+// Дни, когда дневная норма выполнена полностью (для серий, расписаний и календаря)
+const doneDays = (logs: HabitLog[], h: HabitRef) => {
+  const need = perDayOf(h);
+  const counts = new Map<string, number>();
+  for (const l of logs) if (!l.deleted && l.habitId === h.id) counts.set(l.day, (counts.get(l.day) ?? 0) + 1);
+  return [...counts.entries()].filter(([, n]) => n >= need).map(([k]) => k).sort();
+};
 
 // Сколько раз сделано на неделе, в которую входит день d
 const doneInWeek = (days: string[], d: Date) => {
@@ -84,7 +98,7 @@ const doneInWeek = (days: string[], d: Date) => {
 // Нужно ли делать закреплённую привычку в этот день (сделанная сегодня тоже показывается — уже отмеченной)
 export function isDueOn(h: Habit, logs: HabitLog[], d = appNow()): boolean {
   const today = dayKey(d);
-  const days = doneDays(logs, h.id);
+  const days = doneDays(logs, h);
   if (days.includes(today)) return true;
   const f = freqOf(h);
   if (f === 'days') return scheduledOn(h, d);
@@ -102,7 +116,7 @@ export function isDueOn(h: Habit, logs: HabitLog[], d = appNow()): boolean {
 export function calendarPlan(h: Habit, logs: HabitLog[], d: Date, now = appNow()): { show: boolean; done: boolean; missed: boolean } {
   const key = dayKey(d);
   const today = dayKey(now);
-  const days = doneDays(logs, h.id);
+  const days = doneDays(logs, h);
   const done = days.includes(key);
   if (done) return { show: true, done, missed: false };
   const f = freqOf(h);
@@ -122,14 +136,14 @@ export function calendarPlan(h: Habit, logs: HabitLog[], d: Date, now = appNow()
 }
 
 export const weeklyProgress = (h: Habit, logs: HabitLog[], weekDay: Date) => ({
-  done: Math.min(doneInWeek(doneDays(logs, h.id), weekDay), timesOf(h)),
+  done: Math.min(doneInWeek(doneDays(logs, h), weekDay), timesOf(h)),
   need: timesOf(h),
 });
 
 // Подсказка о периоде: «на этой неделе 1 из 2», «следующий раз через 2 дня»
 export function periodInfo(h: Habit, logs: HabitLog[], d = appNow()): string | null {
   const f = freqOf(h);
-  const days = doneDays(logs, h.id);
+  const days = doneDays(logs, h);
   if (f === 'weekly') return `на этой неделе ${Math.min(doneInWeek(days, d), timesOf(h))} из ${timesOf(h)}`;
   if (f === 'every') {
     const last = days.filter((k) => k <= dayKey(d)).pop();
@@ -433,15 +447,15 @@ export const HABIT_ADVICE: { title: string; text: string }[] = [
 
 const live = (logs: HabitLog[]) => logs.filter((l) => !l.deleted);
 
-export const doneOn = (logs: HabitLog[], habitId: string, day: string) =>
-  live(logs).some((l) => l.habitId === habitId && l.day === day);
+// Выполнена ли дневная норма привычки в этот день
+export const doneOn = (logs: HabitLog[], h: HabitRef, day: string) => countOn(logs, h.id, day) >= perDayOf(h);
 
 // Серия одной привычки — сколько раз подряд она выполнена «в срок».
 // По дням недели: незапланированные дни серию не прерывают. «Раз в N дней»: между выполнениями
 // не больше N дней. «N раз в неделю»: считаются недели, в которых норма выполнена.
 // Текущий день/период ещё не закончен — его невыполнение серию не обнуляет.
 export function habitStreak(logs: HabitLog[], habit: Habit, now = appNow()): number {
-  const days = doneDays(logs, habit.id);
+  const days = doneDays(logs, habit);
   const today = startOfDay(now);
   const f = habit.mine ? freqOf(habit) : 'days';
 
@@ -488,7 +502,7 @@ export function bestHabitStreak(data: Pick<AppData, 'habits' | 'habitLogs'>) {
   const today = dayKey();
   let best = 0;
   for (const habit of data.habits) {
-    const days = doneDays(logs, habit.id);
+    const days = doneDays(logs, habit);
     if (!days.length) continue;
     const f = habit.mine ? freqOf(habit) : 'days';
     if (f === 'every') {

@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { IconPlus, IconListCheck, IconSearch, IconRotate, IconArrowMerge, IconX } from '@tabler/icons-react';
+import { IconPlus, IconListCheck, IconSearch, IconRotate, IconArrowMerge, IconX, IconRepeat } from '@tabler/icons-react';
 import type { Task } from '../types';
 import { liveMoods, liveTasks, useStore } from '../store';
 import { useUI } from '../uiStore';
 import { newTask } from '../components/TaskEditor';
 import { MergeDialog, ReopenDialog } from '../components/TaskDialogs';
 import { Bar, Check, Dots, DueTag, Empty, Seg, Switch, TaskIcon } from '../components/ui';
-import { taskProgress, nextStep, remainingMinutes } from '../lib/progress';
+import { allStepsDone, taskProgress, nextStep, remainingMinutes, repeatCountOn, repeatStreak } from '../lib/progress';
 import { isUrgent } from '../lib/deadline';
 import { PALETTE } from '../lib/colors';
 import { DynIcon } from '../lib/icons';
@@ -32,7 +32,7 @@ function TaskRow({ t, selecting, selected, onSelect }: { t: Task; selecting: boo
       <div className="row" style={{ gap: 12 }}>
         {/* выбор делает клик по всей карточке — у галочки свой обработчик не нужен, иначе сработает дважды */}
         {selecting && <Check on={selected} label="Выбрать задачу" onClick={() => {}} />}
-        <TaskIcon color={t.color}>{Math.round(pct * 100)}</TaskIcon>
+        <TaskIcon color={t.color}>{t.repeat ? <IconRepeat size={20} /> : Math.round(pct * 100)}</TaskIcon>
         <div className="grow">
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <p className="task-title" style={{ textDecoration: t.completedAt ? 'line-through' : undefined }}>{t.title}</p>
@@ -43,8 +43,12 @@ function TaskRow({ t, selecting, selected, onSelect }: { t: Task; selecting: boo
           </div>
           <div className="row wrap" style={{ gap: 6 }}>
             <p className="small faint">
-              {t.completedAt
+              {t.repeat
+                ? `Постоянная · сегодня ${repeatCountOn(t)} · всего ${t.doneLog?.length ?? 0}${repeatStreak(t) > 1 ? ` · ${repeatStreak(t)} дн. подряд` : ''}`
+                : t.completedAt
                 ? `Завершена ${dayLabel(new Date(t.completedAt))}`
+                : allStepsDone(t)
+                ? 'Все шаги сделаны — можно завершить'
                 : step
                   ? `Дальше: ${step.title}${left ? ` · осталось ${formatMin(left)}` : ''}`
                   : t.steps.length ? 'Все шаги сделаны' : 'Нет шагов'}

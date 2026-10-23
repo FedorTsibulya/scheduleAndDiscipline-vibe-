@@ -113,8 +113,8 @@ export function TaskEditor({ task, onClose }: { task: Task; onClose: () => void 
       ...t,
       title: t.title.trim(),
       inbox: false,
-      steps: [...t.steps, ...pending],
-      targetCount: regular ? Math.max(1, t.targetCount || 1) : undefined,
+      steps: t.repeat ? t.steps : [...t.steps, ...pending],
+      targetCount: regular && !t.repeat ? Math.max(1, t.targetCount || 1) : undefined,
     });
     onClose();
   };
@@ -153,6 +153,17 @@ export function TaskEditor({ task, onClose }: { task: Task; onClose: () => void 
         </div>
 
         <div className="field">
+          <Switch checked={!!t.repeat} onChange={(v) => patch({ repeat: v, completedAt: v ? undefined : t.completedAt })}
+            label={<span><b>Постоянная задача</b> <span className="small muted">— выполняется сколько угодно раз и никогда не закрывается</span></span>} />
+          {t.repeat && (
+            <p className="small faint" style={{ marginTop: 4 }}>
+              Например, «Написать 1 страницу диплома». Каждое выполнение приносит очки и считается в серию, а у задачи видно, сколько раз она сделана сегодня и сколько дней подряд.
+              {(t.doneLog?.length ?? 0) > 0 && ` Всего выполнений: ${t.doneLog!.length}.`}
+            </p>
+          )}
+        </div>
+
+        {!t.repeat && <div className="field">
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <span className="label-text">Шаги</span>
             {aiButton('steps', t.steps.length ? 'Предложить ещё шаги' : 'Разбить на шаги', () => void aiSteps())}
@@ -196,7 +207,10 @@ export function TaskEditor({ task, onClose }: { task: Task; onClose: () => void 
               </span>
             )}
           </div>
-        </div>
+          {t.steps.length > 0 && !regular && (
+            <p className="small faint">Задача не закрывается сама, когда все шаги отмечены: шаги можно добавлять по ходу работы. Когда всё готово — нажмите «Завершить задачу» на карточке.</p>
+          )}
+        </div>}
 
         {aiConfigured(ai) && (
           <div className="stack" style={{ gap: 6 }}>

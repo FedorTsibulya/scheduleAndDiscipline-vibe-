@@ -4,7 +4,7 @@ import type { Habit, Step, Task } from '../types';
 import { liveHabits, liveTasks, useStore } from '../store';
 import { useUI } from '../uiStore';
 import { PALETTE } from '../lib/colors';
-import { CATEGORIES, calendarPlan, freqOf, weeklyProgress } from '../lib/habits';
+import { CATEGORIES, calendarPlan, countOn, freqOf, perDayOf, weeklyProgress } from '../lib/habits';
 import { DynIcon } from '../lib/icons';
 import { addDays, appNow, dayKey, dayLabel, formatMin, parseDay, startOfWeek, weekdayShort } from '../lib/util';
 import { Bar, colorVars } from '../components/ui';
@@ -56,6 +56,7 @@ function StepChip({ it, days, onMove }: { it: Item; days: Date[]; onMove: (it: I
 // Привычка в дне календаря: пунктирная рамка; отметить можно за сегодня и за вчера (если забыли)
 function HabitChip({ habit, done, missed, day, canMark, isToday }: { habit: Habit; done: boolean; missed: boolean; day: string; canMark: boolean; isToday: boolean }) {
   const toggle = useStore((s) => s.toggleHabit);
+  const logs = useStore((s) => s.data.habitLogs);
   const color = (CATEGORIES[habit.category] ?? CATEGORIES.care).color;
   const p = PALETTE[color];
   return (
@@ -74,7 +75,7 @@ function HabitChip({ habit, done, missed, day, canMark, isToday }: { habit: Habi
         <span className="grow">{habit.title}</span>
       </div>
       <div className="row wrap tint-sub" style={{ justifyContent: 'space-between', fontWeight: 600, fontSize: 11.5, gap: 2 }}>
-        <span>привычка · {habit.minutes} мин</span>
+        <span>привычка · {perDayOf(habit) > 1 ? `${countOn(logs, habit.id, day)}/${perDayOf(habit)}` : `${habit.minutes} мин`}</span>
         {missed && <span>пропуск</span>}
       </div>
     </div>

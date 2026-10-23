@@ -24,7 +24,8 @@ export function buildCtx(data: AppData): Ctx {
   const days = activeDays(data);
   return {
     data,
-    stepsDone: tasks.reduce((a, t) => a + t.steps.filter((s) => s.done).length, 0),
+    // выполнения постоянных задач считаются как шаги
+    stepsDone: tasks.reduce((a, t) => a + t.steps.filter((s) => s.done).length + (t.doneLog?.length ?? 0), 0),
     tasksDone: tasks.filter((t) => t.completedAt).length,
     focusMin: data.sessions.filter((s) => !s.deleted && s.kind === 'focus').reduce((a, s) => a + s.actualMin, 0),
     streak: Math.max(computeStreak(days).current, bestStreak(days)),

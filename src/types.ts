@@ -44,6 +44,10 @@ export interface Task extends Syncable {
   completedAt?: number;
   // Регулярная цель (например, «12 тренировок за месяц»): прогресс = выполненные шаги / цель
   targetCount?: number;
+  // Постоянная задача: выполняется сколько угодно раз и никогда не закрывается
+  // (например, «написать 1 страницу диплома» каждый день). doneLog — моменты выполнений.
+  repeat?: boolean;
+  doneLog?: number[];
 }
 
 export type SessionKind = 'focus' | 'rest';
@@ -94,6 +98,7 @@ export interface Habit extends Syncable {
   builtIn?: boolean;
   hidden?: boolean; // скрыто из пула (не подходит этому пользователю)
   inCalendar?: boolean; // показывать закреплённую привычку в календаре «Неделя»
+  perDay?: number; // сколько раз в день (стакан воды ×4); по умолчанию 1
 }
 
 // Отметка «сделано» за конкретный день
