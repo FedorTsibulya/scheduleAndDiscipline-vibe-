@@ -374,6 +374,57 @@ button, input, select, textarea { font: inherit; color: inherit; }
 :root[data-theme='dark'] .tint-sub { color: var(--c-200); }
 :root[data-theme='dark'] .chip.on { background: color-mix(in srgb, var(--c-800) 55%, var(--surface)); color: var(--c-50); border-color: var(--c-400); }
 
+/* ---------- Главный экран: «огненная строка» + спокойный список ---------- */
+@keyframes fire-border { 0%, 100% { border-color: #E24B4A; } 33% { border-color: #EF9F27; } 66% { border-color: #D85A30; } }
+@keyframes flame { 0%, 100% { transform: scale(1) rotate(-4deg); } 50% { transform: scale(1.18) rotate(4deg); } }
+
+.hot-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 12px; border-radius: var(--radius);
+  border: 2px solid #E24B4A; background: color-mix(in srgb, #FAECE7 70%, var(--surface));
+  animation: fire-border 1.6s linear infinite;
+}
+.hot-row .flame { font-size: 18px; display: inline-block; animation: flame 0.9s ease-in-out infinite; }
+.hot-main, .today-main {
+  display: flex; flex-direction: column; align-items: flex-start; background: none; border: none; padding: 0; cursor: pointer;
+  text-align: left; min-width: 0; color: var(--text);
+}
+.hot-main .t, .today-main .t { font-weight: 800; font-size: 14.5px; overflow-wrap: anywhere; }
+.hot-main .s { font-size: 12.5px; color: #993C1D; }
+.today-main .s { font-size: 12.5px; color: var(--text-2); }
+.hot-btn {
+  width: 34px; height: 34px; border-radius: 999px; border: none; background: #D85A30; color: #fff; display: inline-flex;
+  align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+}
+.hot-btn.ghosty { background: transparent; color: #993C1D; border: 1.5px solid #D85A30; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .hot-row { background: color-mix(in srgb, #4A1B0C 70%, var(--surface)); }
+  :root:not([data-theme='light']) .hot-main .s, :root:not([data-theme='light']) .hot-btn.ghosty { color: #F5C4B3; }
+}
+:root[data-theme='dark'] .hot-row { background: color-mix(in srgb, #4A1B0C 70%, var(--surface)); }
+:root[data-theme='dark'] .hot-main .s, :root[data-theme='dark'] .hot-btn.ghosty { color: #F5C4B3; }
+
+.today-list { display: flex; flex-direction: column; }
+.today-row { padding: 10px 4px; border-bottom: 1px solid var(--border); transition: background 0.15s; border-radius: 0; }
+.today-row:last-child { border-bottom: none; }
+.today-row.open { background: var(--surface-2); border-radius: var(--radius); padding: 10px 10px; }
+.today-row.picked { background: var(--accent-soft); border-radius: var(--radius); padding: 10px 10px; }
+.today-row.rolling { background: var(--primary-soft); border-radius: var(--radius); }
+.ring-check {
+  width: 26px; height: 26px; border-radius: 50%; border: 2.5px solid; background: transparent; flex-shrink: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; transition: transform 0.12s;
+}
+.ring-check svg { opacity: 0; transition: opacity 0.12s; }
+.ring-check:hover { transform: scale(1.08); }
+.ring-check:hover svg { opacity: 1; }
+.mini-bar { display: block; width: 100%; max-width: 220px; height: 3px; border-radius: 3px; background: var(--surface-3); margin-top: 5px; overflow: hidden; }
+.mini-bar > span { display: block; height: 100%; border-radius: 3px; }
+.today-details { margin: 8px 0 2px 38px; }
+.quick-add { display: flex; align-items: center; gap: 8px; margin-top: 24px; }
+.quick-add .input { border-radius: 999px; }
+@media (prefers-reduced-motion: reduce) {
+  .hot-row, .hot-row .flame { animation: none; }
+}
+
 /* Календарь: выбранные шаги, панель переноса, полоса выбора */
 .step-chip.selected { outline: 3px solid var(--accent); outline-offset: 1px; }
 .pool-item { width: 200px; }
