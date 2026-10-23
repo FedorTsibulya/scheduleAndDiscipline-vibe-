@@ -9,7 +9,7 @@ import { dayKey, formatMin, plural } from '../lib/util';
 import { PALETTE } from '../lib/colors';
 import { TaskCard } from '../components/TaskCard';
 import { AskClaude } from '../components/AskClaude';
-import { HabitPicker, PinnedToday } from '../components/Habits';
+import { HabitPicker, HabitReminderStrip, PinnedToday } from '../components/Habits';
 import { NO_MOOD } from '../lib/habits';
 import { Check, Empty, colorVars } from '../components/ui';
 
@@ -103,6 +103,8 @@ export function NowPage() {
           </span>
         </div>
       </div>
+
+      <HabitReminderStrip onOpenAll={() => goTo('habits')} />
 
       {/* на телефоне — одна строка с прокруткой влево-вправо, чтобы задачи были видны сразу */}
       <div className="mood-scroll" ref={moodRow}>

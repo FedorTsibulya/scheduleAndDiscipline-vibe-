@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import {
   IconCheck, IconPin, IconPinnedOff, IconChevronDown, IconChevronUp, IconPencil, IconDice5, IconAnchor, IconBulb, IconHeart,
-  IconTrash, IconFlame, IconCoin, IconCalendarRepeat, IconEye, IconEyeOff, IconMinus,
+  IconTrash, IconFlame, IconCoin, IconCalendarRepeat, IconEye, IconEyeOff, IconMinus, IconBell,
 } from '@tabler/icons-react';
 import type { Habit, HabitCategory, HabitTier } from '../types';
 import { liveHabits, useStore } from '../store';
 import {
-  ALL_HABITS_BONUS, CATEGORIES, TIERS, WEEKDAYS, countOn, doneOn, everyOf, perDayOf, freqOf, habitPoints, habitStreak, periodInfo, pinnedFor,
+  ALL_HABITS_BONUS, CATEGORIES, TIERS, WEEKDAYS, countOn, doneOn, everyOf, perDayOf, reminderFor, freqOf, habitPoints, habitStreak, periodInfo, pinnedFor,
   scheduleLabel, scheduledOn, streakLabel, timesOf, visibleInPool, type Freq,
 } from '../lib/habits';
 import { DynIcon, ICON_KEYS } from '../lib/icons';
@@ -417,6 +417,31 @@ export function PinnedToday({ onOpenAll }: { onOpenAll?: () => void }) {
         })}
       </div>
       {onOpenAll && <button className="btn sm ghost" style={{ marginTop: 6 }} onClick={onOpenAll}>Все привычки</button>}
+    </div>
+  );
+}
+
+// Строка-напоминание на главном экране: закреплённые привычки, не выполненные в своём периоде
+// (сегодня / раз в N дней / на этой неделе). Нажатие — отметить (для «N раз в день» — +1).
+export function HabitReminderStrip({ onOpenAll }: { onOpenAll?: () => void }) {
+  const data = useStore((s) => s.data);
+  const toggle = useStore((s) => s.toggleHabit);
+  const items = liveHabits(data)
+    .map((h) => ({ h, r: reminderFor(h, data.habitLogs) }))
+    .filter((x): x is { h: Habit; r: { label: string; late: boolean } } => !!x.r)
+    .sort((a, b) => Number(b.r.late) - Number(a.r.late));
+  if (!items.length) return null;
+  return (
+    <div className="reminder-strip" role="region" aria-label="Не забудьте о привычках">
+      <span className="small" style={{ fontWeight: 800, color: 'var(--text-2)', flexShrink: 0 }}>
+        <IconBell size={14} style={{ verticalAlign: -2 }} /> Не забудьте:
+      </span>
+      {items.map(({ h, r }) => (
+        <button key={h.id} type="button" className={`reminder-chip ${r.late ? 'late' : ''}`} onClick={() => toggle(h.id)} title="Отметить выполнение">
+          <DynIcon name={h.icon} size={14} /> {h.title} <span className="faint">· {r.label}</span>
+        </button>
+      ))}
+      {onOpenAll && <button type="button" className="btn sm ghost" style={{ flexShrink: 0 }} onClick={onOpenAll}>Все</button>}
     </div>
   );
 }

@@ -374,6 +374,38 @@ button, input, select, textarea { font: inherit; color: inherit; }
 :root[data-theme='dark'] .tint-sub { color: var(--c-200); }
 :root[data-theme='dark'] .chip.on { background: color-mix(in srgb, var(--c-800) 55%, var(--surface)); color: var(--c-50); border-color: var(--c-400); }
 
+/* Календарь: выбранные шаги, панель переноса, полоса выбора */
+.step-chip.selected { outline: 3px solid var(--accent); outline-offset: 1px; }
+.pool-item { width: 200px; }
+@media (max-width: 760px) { .pool-item { width: 100%; } }
+.move-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.move-day {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; border-radius: var(--radius);
+  border: 2px solid var(--border); background: var(--surface); cursor: pointer; text-align: left; color: var(--text);
+}
+.move-day:hover { border-color: var(--border-strong); background: var(--surface-2); }
+.move-day.today { border-color: var(--accent); }
+.move-day:disabled { opacity: 0.4; cursor: not-allowed; }
+.select-bar {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 20px; z-index: 45; display: flex; align-items: center;
+  justify-content: space-between; gap: 12px; background: var(--primary); color: #fff; padding: 8px 10px 8px 18px;
+  border-radius: 999px; box-shadow: var(--shadow); width: min(560px, calc(100% - 24px)); animation: pop 0.2s ease;
+}
+@media (max-width: 760px) { .select-bar { bottom: calc(76px + env(safe-area-inset-bottom)); } }
+
+/* Строка-напоминание о привычках: одна линия, на узком экране прокручивается вбок */
+.reminder-strip {
+  display: flex; align-items: center; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: -6px 0 12px;
+  padding: 6px 2px; white-space: nowrap;
+}
+.reminder-strip::-webkit-scrollbar { display: none; }
+.reminder-chip {
+  display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; border: 1.5px dashed var(--border-strong);
+  background: transparent; color: var(--text); border-radius: 999px; padding: 4px 10px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+.reminder-chip:hover { background: var(--surface-2); }
+.reminder-chip.late { border-color: var(--warning); color: var(--warning-text); background: var(--warning-soft); border-style: solid; }
+
 /* Строка выбора настроения: на компьютере переносится, на телефоне прокручивается вбок */
 .mood-scroll { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
 @media (max-width: 760px) {

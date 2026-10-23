@@ -140,6 +140,34 @@ export const weeklyProgress = (h: Habit, logs: HabitLog[], weekDay: Date) => ({
   need: timesOf(h),
 });
 
+// Напоминание на главном экране: закреплённая привычка не выполнена в своём периоде.
+// Каждый день / по дням недели — сегодня не сделана (или норма не набрана);
+// раз в N дней — подошёл или прошёл срок; N раз в неделю — недельная норма не набрана.
+// Возвращает короткую подпись или null, если напоминать не о чем.
+export function reminderFor(h: Habit, logs: HabitLog[], d = appNow()): { label: string; late: boolean } | null {
+  if (h.deleted || !h.mine) return null;
+  const today = dayKey(d);
+  const count = countOn(logs, h.id, today);
+  const need = perDayOf(h);
+  const f = freqOf(h);
+  if (f === 'weekly') {
+    const days = doneDays(logs, h);
+    const done = doneInWeek(days, d);
+    const times = timesOf(h);
+    if (done >= times) return null;
+    const left = 7 - weekdayIndex(d); // сколько дней недели осталось, включая сегодня
+    return { label: `${done}/${times} на неделе · осталось ${left} ${left === 1 ? 'день' : left < 5 ? 'дня' : 'дней'}`, late: times - done >= left };
+  }
+  if (!isDueOn(h, logs, d) || count >= need) return null;
+  if (f === 'every') {
+    const last = doneDays(logs, h).filter((k) => k < today).pop();
+    const since = last ? daysBetween(last, d) : null;
+    const over = since === null ? 0 : since - everyOf(h);
+    return { label: over > 0 ? `просрочено на ${over} дн.` : 'пора сегодня', late: over > 0 };
+  }
+  return { label: need > 1 ? `${count}/${need} сегодня` : 'сегодня', late: false };
+}
+
 // Подсказка о периоде: «на этой неделе 1 из 2», «следующий раз через 2 дня»
 export function periodInfo(h: Habit, logs: HabitLog[], d = appNow()): string | null {
   const f = freqOf(h);
