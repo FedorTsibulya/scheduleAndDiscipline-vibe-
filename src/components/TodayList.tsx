@@ -45,13 +45,13 @@ export function HotRow({ task }: { task: Task }) {
   const action = useMainAction(task);
   const st = dueStatus(task.due!);
   return (
-    <div className="hot-row">
+    <div className={`hot-row ${st.level === 'overdue' ? 'overdue' : ''}`}>
       <span className="flame" aria-hidden="true">🔥</span>
       <button className="grow hot-main" onClick={() => edit(task)}>
         <span className="t">{task.title}</span>
         <span className="s">{st.level === 'overdue' ? st.label.toLowerCase() : 'срок сегодня'} · {subtitle(task)}</span>
       </button>
-      <button className="hot-btn ghosty" onClick={action.run} aria-label={action.label} title={action.label}><IconCheck size={16} stroke={3} /></button>
+      <button className="hot-btn" onClick={action.run} aria-label={action.label} title={action.label}><IconCheck size={16} stroke={3} /></button>
       <button className="hot-btn" onClick={() => askStart({ taskId: task.id, stepId: nextStep(task)?.id })} aria-label="Начать фокус" title="Начать фокус"><IconPlayerPlay size={16} /></button>
     </div>
   );
