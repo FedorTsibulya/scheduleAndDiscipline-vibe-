@@ -257,7 +257,7 @@ export function WeekPage() {
         <div className="select-bar">
           <span style={{ fontWeight: 800 }}>{selected.length ? `Выбрано: ${selected.length}` : 'Нажимайте на шаги, чтобы выбрать'}</span>
           <div className="row">
-            <button className="btn sm ghost" style={{ color: '#fff' }} onClick={stopSelecting}>Отмена</button>
+            <button className="btn sm ghost" style={{ color: 'inherit' }} onClick={stopSelecting}>Отмена</button>
             <button className="btn sm" disabled={!selected.length}
               onClick={() => setSheet(allItems.filter((it) => selected.includes(itemKey(it))))}>
               <IconCalendarEvent size={15} /> Перенести

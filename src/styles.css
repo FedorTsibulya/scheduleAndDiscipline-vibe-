@@ -1,21 +1,24 @@
+/* Нейтральная графитовая палитра: фон и рамки без оттенка, цвет — только у подсказок
+   (огонь, цвета задач и категорий, акцентные кнопки) */
 :root {
-  --bg: #f6f4ff;
+  --bg: #f7f6f3;
   --surface: #ffffff;
-  --surface-2: #eeedfe;
-  --surface-3: #e4e2fb;
-  --border: #cecbf6;
-  --border-strong: #7f77dd;
-  --text: #26215c;
-  --text-2: #534ab7;
-  --text-3: #8a84c9;
+  --surface-2: #f1efe8;
+  --surface-3: #e5e3dc;
+  --border: #e1dfd8;
+  --border-strong: #b4b2a9;
+  --text: #1f1e1d;
+  --text-2: #5f5e5a;
+  --text-3: #8a8983;
   --accent: #d4537e;
   --accent-hover: #c0436d;
   --accent-text: #ffffff;
   --accent-soft: #fbeaf0;
   --accent-soft-text: #72243e;
-  --primary: #7f77dd;
-  --primary-soft: #cecbf6;
-  --primary-soft-text: #3c3489;
+  --primary: #2c2c2a;
+  --on-primary: #ffffff;
+  --primary-soft: #ebe9e3;
+  --primary-soft-text: #1f1e1d;
   --gold: #fac775;
   --gold-text: #633806;
   --success: #1d9e75;
@@ -27,8 +30,8 @@
   --danger: #e24b4a;
   --danger-soft: #fcebeb;
   --danger-text: #791f1f;
-  --grid: #e4e2fb;
-  --shadow: 0 6px 20px rgba(83, 74, 183, 0.12);
+  --grid: #e8e6e0;
+  --shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
   --radius: 14px;
   --radius-lg: 22px;
   --font: 'Nunito', 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -37,21 +40,23 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #15132b;
-    --surface: #1f1c3d;
-    --surface-2: #29254f;
-    --surface-3: #332e60;
-    --border: #3c3489;
-    --border-strong: #7f77dd;
-    --text: #eeedfe;
-    --text-2: #afa9ec;
-    --text-3: #7f77dd;
+    --bg: #1b1b1a;
+    --surface: #242423;
+    --surface-2: #2d2d2b;
+    --surface-3: #393936;
+    --border: #383835;
+    --border-strong: #5f5e5a;
+    --text: #f0efec;
+    --text-2: #c3c2b7;
+    --text-3: #8a8983;
     --accent: #e0668f;
     --accent-hover: #ea7da2;
     --accent-soft: #4b1528;
     --accent-soft-text: #f4c0d1;
-    --primary-soft: #3c3489;
-    --primary-soft-text: #eeedfe;
+    --primary: #ecebe6;
+    --on-primary: #1b1b1a;
+    --primary-soft: #393936;
+    --primary-soft-text: #f0efec;
     --gold: #854f0b;
     --gold-text: #fac775;
     --success-soft: #04342c;
@@ -60,28 +65,30 @@
     --warning-text: #fac775;
     --danger-soft: #501313;
     --danger-text: #f7c1c1;
-    --grid: #2c2858;
+    --grid: #2f2f2d;
     --shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
     color-scheme: dark;
   }
 }
 
 :root[data-theme='dark'] {
-  --bg: #15132b;
-  --surface: #1f1c3d;
-  --surface-2: #29254f;
-  --surface-3: #332e60;
-  --border: #3c3489;
-  --border-strong: #7f77dd;
-  --text: #eeedfe;
-  --text-2: #afa9ec;
-  --text-3: #7f77dd;
+  --bg: #1b1b1a;
+  --surface: #242423;
+  --surface-2: #2d2d2b;
+  --surface-3: #393936;
+  --border: #383835;
+  --border-strong: #5f5e5a;
+  --text: #f0efec;
+  --text-2: #c3c2b7;
+  --text-3: #8a8983;
   --accent: #e0668f;
   --accent-hover: #ea7da2;
   --accent-soft: #4b1528;
   --accent-soft-text: #f4c0d1;
-  --primary-soft: #3c3489;
-  --primary-soft-text: #eeedfe;
+  --primary: #ecebe6;
+  --on-primary: #1b1b1a;
+  --primary-soft: #393936;
+  --primary-soft-text: #f0efec;
   --gold: #854f0b;
   --gold-text: #fac775;
   --success-soft: #04342c;
@@ -90,7 +97,7 @@
   --warning-text: #fac775;
   --danger-soft: #501313;
   --danger-text: #f7c1c1;
-  --grid: #2c2858;
+  --grid: #2f2f2d;
   --shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
   color-scheme: dark;
 }
@@ -185,7 +192,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn:active { transform: scale(0.97); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 .btn.primary:hover { background: var(--accent-hover); }
-.btn.violet { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.violet { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 .btn.ghost { border-color: transparent; background: transparent; }
 .btn.ghost:hover { background: var(--surface-2); }
 .btn.danger { color: var(--danger-text); border-color: var(--danger-soft); background: var(--danger-soft); }
@@ -293,10 +300,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* ---------- таймер ---------- */
 .timer-bar {
   position: fixed; right: 20px; bottom: 20px; z-index: 40; display: flex; align-items: center; gap: 12px;
-  background: var(--primary); color: #fff; padding: 10px 12px 10px 18px; border-radius: 999px; box-shadow: var(--shadow); cursor: pointer;
+  background: var(--primary); color: var(--on-primary); padding: 10px 12px 10px 18px; border-radius: 999px; box-shadow: var(--shadow); cursor: pointer;
   animation: pop 0.25s ease;
 }
-.timer-bar.rest { background: var(--success); }
+.timer-bar.rest { background: var(--success); color: #fff; }
 .timer-bar .time { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
 @media (max-width: 760px) { .timer-bar { right: 12px; left: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); justify-content: space-between; } }
 
@@ -439,7 +446,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .move-day:disabled { opacity: 0.4; cursor: not-allowed; }
 .select-bar {
   position: fixed; left: 50%; transform: translateX(-50%); bottom: 20px; z-index: 45; display: flex; align-items: center;
-  justify-content: space-between; gap: 12px; background: var(--primary); color: #fff; padding: 8px 10px 8px 18px;
+  justify-content: space-between; gap: 12px; background: var(--primary); color: var(--on-primary); padding: 8px 10px 8px 18px;
   border-radius: 999px; box-shadow: var(--shadow); width: min(560px, calc(100% - 24px)); animation: pop 0.2s ease;
 }
 @media (max-width: 760px) { .select-bar { bottom: calc(76px + env(safe-area-inset-bottom)); } }

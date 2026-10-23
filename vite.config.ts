@@ -20,8 +20,8 @@ export default defineConfig({
         start_url: './',
         scope: './',
         display: 'standalone',
-        background_color: '#F6F4FF',
-        theme_color: '#7F77DD',
+        background_color: '#1b1b1a',
+        theme_color: '#1b1b1a',
         icons: [
           { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
           { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' },

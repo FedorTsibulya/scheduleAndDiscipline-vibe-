@@ -149,7 +149,7 @@ export function TimerBar() {
         <span className="time">{formatClock(left)}</span>
         {timer.pausedAt && <span className="small">пауза</span>}
       </span>
-      <button className="btn icon" style={{ background: 'rgba(255,255,255,.2)', border: 'none', color: '#fff' }}
+      <button className="btn icon" style={{ background: 'color-mix(in srgb, currentColor 18%, transparent)', border: 'none', color: 'inherit' }}
         onClick={(e) => { e.stopPropagation(); if (timer.pausedAt) resume(); else pause(); }}
         aria-label={timer.pausedAt ? 'Продолжить' : 'Пауза'}>
         {timer.pausedAt ? <IconPlayerPlay size={18} /> : <IconPlayerPause size={18} />}
