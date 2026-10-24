@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { IconPlus, IconListCheck, IconSearch, IconRotate, IconArrowMerge, IconX, IconRepeat } from '@tabler/icons-react';
 import type { Task } from '../types';
 import { liveMoods, liveTasks, useStore } from '../store';
-import { useUI } from '../uiStore';
+import { goTo, useUI } from '../uiStore';
 import { newTask } from '../components/TaskEditor';
+import { HabitsFold } from '../components/Habits';
 import { MergeDialog, ReopenDialog } from '../components/TaskDialogs';
 import { Bar, Check, Dots, DueTag, Empty, Seg, Switch, TaskIcon } from '../components/ui';
 import { allStepsDone, taskProgress, nextStep, remainingMinutes, repeatCountOn, repeatStreak } from '../lib/progress';
@@ -116,6 +117,8 @@ export function TasksPage() {
           <button className="btn primary sm" disabled={selected.length < 2} onClick={() => setMerging(true)}><IconArrowMerge size={15} /> Объединить выбранные</button>
         </div>
       )}
+
+      <HabitsFold onOpenAll={() => goTo('habits')} />
 
       <div className="row wrap" style={{ marginBottom: 16, gap: 12 }}>
         <div className="row grow" style={{ minWidth: 200, position: 'relative' }}>

@@ -367,56 +367,72 @@ export function HabitPicker({ count = 3 }: { count?: number }) {
   );
 }
 
-// Компактный чек-лист закреплённых привычек на сегодня (для экрана «Сейчас»)
-export function PinnedToday({ onOpenAll }: { onOpenAll?: () => void }) {
+// Сворачиваемая строка закреплённых привычек на сегодня: в заголовке «сделано из запланированных»,
+// раскрытая — чек-лист с отметками (для вкладки «Задачи»)
+export function HabitsFold({ onOpenAll }: { onOpenAll?: () => void }) {
   const data = useStore((s) => s.data);
   const toggle = useStore((s) => s.toggleHabit);
+  const [open, setOpen] = useState(false);
   const today = dayKey();
   const list = pinnedFor(data.habits, data.habitLogs);
   if (!list.length) return null;
   const done = list.filter((x) => doneOn(data.habitLogs, x, today)).length;
+  const all = done === list.length;
   const sorted = [...list].sort((a, b) => Number(doneOn(data.habitLogs, a, today)) - Number(doneOn(data.habitLogs, b, today)));
 
   return (
-    <div className="section">
-      <div className="section-head">
-        <h2 className="row" style={{ gap: 8 }}><IconPin size={20} color="var(--accent)" /> Привычки на сегодня</h2>
-        <span className="small muted">{done} из {list.length}{done < list.length && list.length > 1 ? ` · за все бонус +${ALL_HABITS_BONUS}` : done === list.length ? ' · всё сделано!' : ''}</span>
-      </div>
-      <div style={{ marginBottom: 10 }}><Bar value={done / list.length} color="var(--success)" /></div>
-      <div className="card" style={{ padding: '6px 14px' }}>
-        {sorted.map((x) => {
-          const on = doneOn(data.habitLogs, x, today);
-          const need = perDayOf(x);
-          const count = countOn(data.habitLogs, x.id, today);
-          const streak = habitStreak(data.habitLogs, x);
-          const cat = CATEGORIES[x.category] ?? CATEGORIES.care;
-          return (
-            <div key={x.id} className={`step-row ${on ? 'done' : ''}`}>
-              {need > 1 ? (
-                // несколько раз в день: кнопка-счётчик, каждое нажатие +1
-                <button className={`check ${on ? 'on' : ''}`} onClick={() => toggle(x.id)} aria-label={`Отметить: ${count} из ${need}`}
-                  style={{ width: 'auto', minWidth: 40, padding: '0 6px', fontSize: 12, fontWeight: 800, color: on ? '#fff' : 'var(--text-2)' }}>
-                  {count}/{need}
-                </button>
-              ) : (
-                <Check on={on} label="Привычка выполнена" onClick={() => toggle(x.id)} />
-              )}
-              <span className="tint-sub" style={{ ...colorVars(cat.color), display: 'inline-flex' }}><DynIcon name={x.icon} size={18} /></span>
-              <div className="grow">
-                <p className="step-title" style={{ fontWeight: 700 }}>{x.title}</p>
-                <p className="small faint">
-                  {x.minutes} мин · {scheduleLabel(x)}
-                  {periodInfo(x, data.habitLogs) ? ` (${periodInfo(x, data.habitLogs)})` : ''}
-                  {streak > 1 ? ` · ${streakLabel(x, streak)}` : ''}
-                </p>
+    <div className={`card habits-fold ${open ? 'open' : ''}`}>
+      <button type="button" className="habits-fold-head" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <IconPin size={18} color="var(--accent)" style={{ flexShrink: 0 }} />
+        <span className="grow" style={{ minWidth: 0 }}>
+          <span className="row" style={{ justifyContent: 'space-between', gap: 8 }}>
+            <span style={{ fontWeight: 800 }}>Привычки на сегодня</span>
+            <span className="small" style={{ fontWeight: 800, color: all ? 'var(--success)' : 'var(--text-2)' }}>
+              {all ? <IconCheck size={14} style={{ verticalAlign: -2 }} /> : null} {done} / {list.length}
+            </span>
+          </span>
+          <span style={{ display: 'block', marginTop: 6 }}><Bar value={done / list.length} color="var(--success)" thin /></span>
+        </span>
+        {open ? <IconChevronUp size={18} style={{ flexShrink: 0, color: 'var(--text-3)' }} /> : <IconChevronDown size={18} style={{ flexShrink: 0, color: 'var(--text-3)' }} />}
+      </button>
+      {open && (
+        <div className="habits-fold-body">
+          <p className="small faint" style={{ margin: '0 0 2px' }}>
+            {all ? 'Все привычки на сегодня сделаны!' : list.length > 1 ? `За все привычки дня — бонус +${ALL_HABITS_BONUS}` : ''}
+          </p>
+          {sorted.map((x) => {
+            const on = doneOn(data.habitLogs, x, today);
+            const need = perDayOf(x);
+            const count = countOn(data.habitLogs, x.id, today);
+            const streak = habitStreak(data.habitLogs, x);
+            const cat = CATEGORIES[x.category] ?? CATEGORIES.care;
+            return (
+              <div key={x.id} className={`step-row ${on ? 'done' : ''}`}>
+                {need > 1 ? (
+                  // несколько раз в день: кнопка-счётчик, каждое нажатие +1
+                  <button className={`check ${on ? 'on' : ''}`} onClick={() => toggle(x.id)} aria-label={`Отметить: ${count} из ${need}`}
+                    style={{ width: 'auto', minWidth: 40, padding: '0 6px', fontSize: 12, fontWeight: 800, color: on ? '#fff' : 'var(--text-2)' }}>
+                    {count}/{need}
+                  </button>
+                ) : (
+                  <Check on={on} label="Привычка выполнена" onClick={() => toggle(x.id)} />
+                )}
+                <span className="tint-sub" style={{ ...colorVars(cat.color), display: 'inline-flex' }}><DynIcon name={x.icon} size={18} /></span>
+                <div className="grow">
+                  <p className="step-title" style={{ fontWeight: 700 }}>{x.title}</p>
+                  <p className="small faint">
+                    {x.minutes} мин · {scheduleLabel(x)}
+                    {periodInfo(x, data.habitLogs) ? ` (${periodInfo(x, data.habitLogs)})` : ''}
+                    {streak > 1 ? ` · ${streakLabel(x, streak)}` : ''}
+                  </p>
+                </div>
+                <span className="pill gold" style={{ fontSize: 12, padding: '2px 9px' }}>+{habitPoints(x)}</span>
               </div>
-              <span className="pill gold" style={{ fontSize: 12, padding: '2px 9px' }}>+{habitPoints(x)}</span>
-            </div>
-          );
-        })}
-      </div>
-      {onOpenAll && <button className="btn sm ghost" style={{ marginTop: 6 }} onClick={onOpenAll}>Все привычки</button>}
+            );
+          })}
+          {onOpenAll && <button className="btn sm ghost" style={{ marginTop: 4 }} onClick={onOpenAll}>Все привычки</button>}
+        </div>
+      )}
     </div>
   );
 }

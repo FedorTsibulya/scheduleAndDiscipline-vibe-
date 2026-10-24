@@ -266,6 +266,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .check:hover { transform: scale(1.08); }
 .check.on { background: var(--success); border-color: var(--success); }
+/* Сворачиваемая строка привычек на вкладке «Задачи» */
+.habits-fold { padding: 0; margin-bottom: 16px; overflow: hidden; }
+.habits-fold-head {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; background: none; border: none;
+  color: var(--text); text-align: left; cursor: pointer; font: inherit;
+}
+.habits-fold-head:hover { background: var(--surface-2); }
+.habits-fold-body { padding: 0 14px 10px; border-top: 1px solid var(--border); padding-top: 8px; }
 .step-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1.5px dashed var(--border); }
 .step-row:last-child { border-bottom: none; }
 .step-row.done .step-title { text-decoration: line-through; color: var(--text-3); }
