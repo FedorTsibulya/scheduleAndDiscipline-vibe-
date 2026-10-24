@@ -390,9 +390,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* ---------- Главный экран: «огненная строка» + спокойный список ---------- */
 @keyframes fire-soft { 0%, 100% { border-color: rgba(216, 90, 48, 0.55); } 50% { border-color: rgba(239, 159, 39, 0.9); } }
 @keyframes flame { 0%, 100% { transform: scale(1) rotate(-4deg); } 50% { transform: scale(1.18) rotate(4deg); } }
-/* пламя по правому краю просроченной задачи: поднимается снизу и подрагивает */
-@keyframes rise { 0% { background-position: 0 100%; } 100% { background-position: 0 0; } }
-@keyframes flicker { 0%, 100% { transform: scaleY(1); opacity: 1; } 30% { transform: scaleY(0.82); opacity: 0.85; } 60% { transform: scaleY(0.94); opacity: 1; } 80% { transform: scaleY(0.78); opacity: 0.9; } }
+/* языки пламени внизу просроченной задачи: каждый вытягивается и клонится в своём ритме */
+@keyframes tongue { 0%, 100% { transform: scaleY(1) skewX(0deg); } 25% { transform: scaleY(1.18) skewX(-5deg); } 50% { transform: scaleY(0.86) skewX(4deg); } 75% { transform: scaleY(1.1) skewX(-2deg); } }
 
 /* Огненная строка: фон как у остальных задач, огонь — в мягко переливающейся рамке и значке */
 .hot-row {
@@ -402,15 +401,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .hot-row .hot-main { color: var(--text); }
 .hot-row .flame { font-size: 18px; display: inline-block; animation: flame 0.9s ease-in-out infinite; }
-/* Просрочено: вся правая сторона рамки горит снизу вверх */
-.hot-row.overdue::after {
-  content: ''; position: absolute; top: -2px; bottom: -2px; right: -2px; width: 5px; pointer-events: none;
-  border-radius: 0 var(--radius) var(--radius) 0;
-  background: linear-gradient(0deg, #E24B4A 0%, #D85A30 25%, #EF9F27 50%, #FAC775 70%, rgba(250, 199, 117, 0) 100%);
-  background-size: 100% 200%; transform-origin: bottom;
-  animation: rise 1.1s linear infinite, flicker 0.7s ease-in-out infinite;
-  filter: drop-shadow(0 0 3px rgba(239, 159, 39, 0.7));
+/* Просрочено: нижняя часть плашки горит */
+.hot-row.overdue { padding-bottom: 28px; }
+.hot-row > * { position: relative; z-index: 1; }
+.hot-row > .fire-strip {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 28px; z-index: 0; pointer-events: none;
+  border-radius: 0 0 calc(var(--radius) - 2px) calc(var(--radius) - 2px); overflow: hidden;
 }
+.fire-strip svg { display: block; width: 100%; height: 100%; }
+.fire-strip .tongue { transform-box: fill-box; transform-origin: 50% 100%; animation: tongue 1s ease-in-out infinite; }
 .hot-main, .today-main {
   display: flex; flex-direction: column; align-items: flex-start; background: none; border: none; padding: 0; cursor: pointer;
   text-align: left; min-width: 0; color: var(--text);
@@ -443,7 +442,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .quick-add { display: flex; align-items: center; gap: 8px; margin-top: 24px; }
 .quick-add .input { border-radius: 999px; }
 @media (prefers-reduced-motion: reduce) {
-  .hot-row, .hot-row .flame, .hot-row.overdue::after { animation: none; }
+  .hot-row, .hot-row .flame, .fire-strip .tongue { animation: none; }
 }
 
 /* Календарь: выбранные шаги, панель переноса, полоса выбора */

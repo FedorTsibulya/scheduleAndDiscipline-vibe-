@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { IconCheck, IconPlayerPlay, IconPencil, IconArrowBackUp, IconFlame } from '@tabler/icons-react';
 import type { Task } from '../types';
 import { liveMoods, useStore } from '../store';
@@ -38,6 +38,51 @@ function subtitle(task: Task): string {
   return 'без шагов';
 }
 
+// Нарисованный огонь по низу плашки: языки в три слоя (красный, оранжевый, жёлтая сердцевина),
+// у каждого своя высота и ритм — набор выбирается один раз, чтобы пламя не «прыгало» при перерисовке
+const FIRE_W = 420;
+const FIRE_H = 34;
+const FIRE_LAYERS = [
+  { color: '#E24B4A', w: 26, h: 1, lag: 0 },
+  { color: '#EF9F27', w: 18, h: 0.72, lag: 0.1 },
+  { color: '#FAC775', w: 9, h: 0.42, lag: 0.2 },
+];
+
+function tonguePath(cx: number, w: number, h: number) {
+  const x0 = cx - w / 2;
+  const top = FIRE_H - h;
+  return `M${x0} ${FIRE_H} C${x0} ${FIRE_H - h * 0.45} ${cx - w * 0.1} ${top + h * 0.35} ${cx} ${top} C${cx + w * 0.1} ${top + h * 0.35} ${x0 + w} ${FIRE_H - h * 0.45} ${x0 + w} ${FIRE_H} Z`;
+}
+
+function FireStrip() {
+  const tongues = useMemo(() => {
+    const n = 22;
+    return Array.from({ length: n }, (_, i) => ({
+      cx: (i + 0.5) * (FIRE_W / n) + (Math.random() - 0.5) * 6,
+      h: 20 + Math.random() * 14,
+      delay: Math.random(),
+      dur: 0.6 + Math.random() * 0.6,
+    }));
+  }, []);
+  return (
+    <span className="fire-strip" aria-hidden="true">
+      <svg viewBox={`0 0 ${FIRE_W} ${FIRE_H}`} preserveAspectRatio="none">
+        {tongues.map((t, i) =>
+          FIRE_LAYERS.map((l) => (
+            <path
+              key={`${i}-${l.color}`}
+              className="tongue"
+              fill={l.color}
+              style={{ animationDelay: `${t.delay + l.lag}s`, animationDuration: `${t.dur}s` }}
+              d={tonguePath(t.cx, l.w, t.h * l.h)}
+            />
+          )),
+        )}
+      </svg>
+    </span>
+  );
+}
+
 // Огненная строка: задача, срок которой сегодня или уже прошёл
 export function HotRow({ task }: { task: Task }) {
   const askStart = useUI((s) => s.askStart);
@@ -53,6 +98,7 @@ export function HotRow({ task }: { task: Task }) {
       </button>
       <button className="hot-btn" onClick={action.run} aria-label={action.label} title={action.label}><IconCheck size={16} stroke={3} /></button>
       <button className="hot-btn" onClick={() => askStart({ taskId: task.id, stepId: nextStep(task)?.id })} aria-label="Начать фокус" title="Начать фокус"><IconPlayerPlay size={16} /></button>
+      {st.level === 'overdue' && <FireStrip />}
     </div>
   );
 }

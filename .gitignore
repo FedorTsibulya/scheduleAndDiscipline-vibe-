@@ -7,3 +7,6 @@ dev-dist
 # локальные настройки Claude Code
 .claude/
 *.tsbuildinfo
+
+# черновики дизайна (не публикуются)
+design-drafts/
