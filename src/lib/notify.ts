@@ -13,14 +13,14 @@ export async function notify(title: string, body: string) {
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
     if (reg) {
-      await reg.showNotification(title, { body, icon: './icon.svg', badge: './icon.svg', tag: 'focus-timer' });
+      await reg.showNotification(title, { body, icon: './icon-192.png', badge: './favicon.png', tag: 'focus-timer' });
       return;
     }
   } catch {
     /* падаем на обычное уведомление */
   }
   try {
-    new Notification(title, { body, icon: './icon.svg', tag: 'focus-timer' });
+    new Notification(title, { body, icon: './icon-192.png', tag: 'focus-timer' });
   } catch {
     /* на некоторых мобильных браузерах конструктор запрещён */
   }

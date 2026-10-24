@@ -132,7 +132,7 @@ export default function App() {
   return (
     <div className="app">
       <nav className="sidebar" aria-label="Разделы">
-        <div className="brand"><img src="./icon.svg" alt="" /> Focus Quest</div>
+        <div className="brand"><img src="./icon-192.png" alt="" /> Focus Quest</div>
         {navButtons(true)}
         <div style={{ marginTop: 'auto' }}><SyncBadge /></div>
       </nav>

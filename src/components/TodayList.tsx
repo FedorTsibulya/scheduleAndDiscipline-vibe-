@@ -41,7 +41,7 @@ function subtitle(task: Task): string {
 // Нарисованный огонь по низу плашки: языки в три слоя (красный, оранжевый, жёлтая сердцевина),
 // у каждого своя высота и ритм — набор выбирается один раз, чтобы пламя не «прыгало» при перерисовке
 const FIRE_W = 420;
-const FIRE_H = 34;
+const FIRE_H = 24;
 const FIRE_LAYERS = [
   { color: '#E24B4A', w: 26, h: 1, lag: 0 },
   { color: '#EF9F27', w: 18, h: 0.72, lag: 0.1 },
@@ -59,7 +59,7 @@ function FireStrip() {
     const n = 22;
     return Array.from({ length: n }, (_, i) => ({
       cx: (i + 0.5) * (FIRE_W / n) + (Math.random() - 0.5) * 6,
-      h: 20 + Math.random() * 14,
+      h: 13 + Math.random() * 9,
       delay: Math.random(),
       dur: 0.6 + Math.random() * 0.6,
     }));
